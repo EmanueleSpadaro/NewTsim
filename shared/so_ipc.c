@@ -16,10 +16,15 @@
 
 extern conf_t conf;
 extern masterbook *mbook;
+extern int nodesNumber;
 
 static int semid;
 static int shmid;
-static int msgid;
+static int ctrlmsgid;
+static int ilistenfrom;
+/* Non statico, per permettere di accedervi e gestire l'evento di un nuovo nodo differentemente
+ * tra user, node, master*/
+int *nodemsgids;
 
 pid_t *userPIDs;
 
@@ -40,8 +45,15 @@ int initipcs() {
     IFERRNORETIT
 
     /* We get a Message Queue to enable easy transactions exchange */
-    msgid = msgget(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | IPC_RW);
+    ctrlmsgid = msgget(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | IPC_RW);
+    ilistenfrom = ctrlmsgid;
     IFERRNORETIT
+    nodemsgids = calloc(nodesNumber, sizeof(int));
+    for(i = 0; i < nodesNumber; i++)
+    {
+        nodemsgids[i] = msgget(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | IPC_RW);
+        IFERRNORETIT
+    }
 
 
     int memsize = sizeof(pid_t) * conf.USERS_NUM;
@@ -69,7 +81,11 @@ int initipcs() {
 }
 
 int releaseipcs() {
-    return msgctl(msgid, IPC_RMID, 0)
+    int errOR = 0, i;
+    for(i = 0; i < nodesNumber; i++)
+        errOR |= msgctl(nodemsgids[i], IPC_RMID, 0);
+    return errOR
+    | msgctl(ctrlmsgid, IPC_RMID, 0)
     | shmctl(shmid, IPC_RMID, 0)
     | semctl(semid, IPC_RMID, 0);
 }
@@ -98,29 +114,46 @@ int syncwait() {
     return 0;
 }
 
-int sendcmessage(cmessage cm) {
-    return msgsnd(msgid, &cm, sizeof(cm) - sizeof(long), 0);
-}
-
-int trysendtmessage(tmessage tm)
+int updateMyListeningQueue(int i)
 {
-    return msgsnd(msgid, &tm, sizeof(tm) - sizeof(long), IPC_NOWAIT);
+    ilistenfrom = nodemsgids[i];
 }
 
-int sendtmessage(tmessage tm) {
-    return msgsnd(msgid, &tm, sizeof(tm) - sizeof(long), 0);
+int sendcmessage(cmessage cm) {
+    return msgsnd(ctrlmsgid, &cm, sizeof(cm) - sizeof(long), 0);
 }
 
+/* Il tipo rappresenta effettivamente l'object, l'index è l'indirizzo relativo all'array delle queue dei nodi */
+int trysendtmessage(tmessage tm, int index)
+{
+    return msgsnd(nodemsgids[index], &tm, sizeof(tm) - sizeof(long), IPC_NOWAIT);
+}
+
+/* Il tipo rappresenta effettivamente l'object, l'index è l'indirizzo relativo all'array delle queue dei nodi */
+int sendtmessage(tmessage tm, int index) {
+    return msgsnd(nodemsgids[index], &tm, sizeof(tm) - sizeof(long), 0);
+}
+
+/* La ctrlmsg è comune, il tipo deve essere il pid per differenziare */
 int waitcmessage(cmessage *cm) {
-    return msgrcv(msgid, cm, sizeof(*cm) - sizeof(long), getpid(), 0);
+    return msgrcv(ctrlmsgid, cm, sizeof(*cm) - sizeof(long), getpid(), 0);
+}
+int checkcmessage(cmessage *cm) {
+    return msgrcv(ctrlmsgid, cm, sizeof(*cm) - sizeof(long), getpid(), IPC_NOWAIT);
 }
 
+/* Solo i nodi aspettano per i tmessage ed hanno una personale coda di messaggi, da qui ilistenfrom e msgtyp 0*/
 int waittmessage(tmessage *tm) {
-    return msgrcv(msgid, tm, sizeof(*tm) - sizeof(long), getpid(), 0);
+    return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), 0, 0);
+}
+/* Solo i nodi aspettano per i tmessage ed hanno una personale coda di messaggi, da qui ilistenfrom e msgtyp 0*/
+int checktmessage(tmessage *tm) {
+    return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), 0, IPC_NOWAIT);
 }
 
-int checktmessage(tmessage *tm) {
-    return msgrcv(msgid, tm, sizeof(*tm) - sizeof(long), getpid(), IPC_NOWAIT);
+int allocnewmsgq()
+{
+    return msgget(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | IPC_RW);
 }
 
 int blocksignal(int signum) {
@@ -155,7 +188,6 @@ int endbookwrite() {
     return 0;
 }
 
-extern masterbook *mbook;
 int waitbookread() {
     struct sembuf sbuf;
     sbuf.sem_flg = SEM_UNDO;

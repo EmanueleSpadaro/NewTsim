@@ -40,9 +40,9 @@ int main(int argc, char const *argv[]) {
         fprintf(stderr, "Error while initializing IPCs\n");
 
     for( i = 0; i < nodesNumber; i++)
-        nodePIDs[i] = spawnNode();
+        nodePIDs[i] = spawnNode(i);
     for( i = 0; i < nodesNumber; i++)
-        sendFriendsTo(nodePIDs[i]);
+        sendFriendsTo(nodePIDs[i], i);
 
     for( i = 0; i < conf.USERS_NUM; i++)
         userPIDs[i] = spawnUser();
@@ -96,7 +96,6 @@ int main(int argc, char const *argv[]) {
     for( i = 0; i < nodesNumber + conf.USERS_NUM; i++)
         wait(NULL);
     puts("[MASTER] Clearing IPCs and exiting...");
-    getc(stdin);
     if(releaseipcs())
         fprintf(stderr, "Error while cleaning IPCs\n");
     return 0;
@@ -104,10 +103,12 @@ int main(int argc, char const *argv[]) {
 
 static void multipurposeMasterHandler(int snum)
 {
-    int i, j, notifiedCtr;
+    extern int *nodemsgids;
+    int i, j, notifiedCtr, newmsgqid;
     pid_t *alreadyNotified;
-    pid_t tmppid;
+    pid_t tmpindex;
     tmessage tmsg;
+    cmessage cmsg; /* Per */
     union sigval sv;
     switch (snum) {
         /* Interrompiamo la simulazione prematuramente */
@@ -124,43 +125,56 @@ static void multipurposeMasterHandler(int snum)
         }
         /* Creiamo un nuovo nodo, notifichiamo gli utenti della sua esistenza, imponiamo a SO_NUM_FRIENDS di
          * aggiungerlo come tale. */
+
         case SIGUSR2:
         {
             /* Otteniamo il messaggio, siamo sicuri esista nella queue sennò il nodo non avrebbe segnalato */
-            /* N.B. Non mi preoccupo del tipo perché è l'unico messaggio che può essere inviato al master durante il
-             * perido in cui la simulazione è in esecuzione */
-            waittmessage(&tmsg);
+            /* N.B. Sapendo che esiste gestiamo i messaggi che otteniamo a nome nostro, fino a quello che effettivamente
+             * risulta essere una richiesta di generazione di un nuovo nodo dall'object */
+            do {
+                waitcmessage(&cmsg);
+            }while(cmsg.object != CMEX_HOPS_ZERO);
+
             /* Rialloco per aver una cella in più nell'array dei nodi per contenere quello nuovo*/
             nodePIDs =  reallocarray(nodePIDs, nodesNumber+1, sizeof(pid_t));
-            /* Lo genero*/
-            nodePIDs[nodesNumber] = spawnNode();
+            nodemsgids = reallocarray(nodemsgids, nodesNumber+1, sizeof(int));
+            newmsgqid = allocnewmsgq();
+            nodemsgids[nodesNumber] = newmsgqid;
+            /* Per mantenere la consistenza di nodesNumber e permettere agevolmente di ricevere amici anche al nuovo
+             * nodo, incremento in modo fittizio nodesNumber per far si che spawnNode permetta al nuovo nodo di avere
+             * nodesNumber effettivamente consistente con quello che sarà della simulazione dopo la sua creazione */
+            nodesNumber += 1;
+            nodePIDs[nodesNumber-1] = spawnNode(nodesNumber-1);
+            /* Riporto nodesNumber ad un valore che ci permette di usarlo come riferimento alla nuova istanza di nodo */
+            nodesNumber -= 1;
             /* Gli invio NUM_FRIENDS nodi come amici */
             for(i = 0; i < conf.NUM_FRIENDS; i++)
-                sendFriendsTo(nodePIDs[nodesNumber]);
+                sendFriendsTo(nodePIDs[nodesNumber], nodesNumber);
             /* Gli invio la transazione da gestire, sarà il primo messaggio a lui destinato e di conseguenza sarà
              * effettivamente la prima transazione che avrà nella Transaction Pool come da richiesta */
-            tmsg.recipient = nodePIDs[nodesNumber];
             tmsg.object = TMEX_PROCESS_RQST;
-            sendtmessage(tmsg);
+            sendtmessage(tmsg, nodesNumber);
 
             /* Notifico SO_NUM_FRIENDS nodi diversi di aggiungere il nuovo arrivato alla loro lista di amici */
             /* Preparo un array sufficientemente grande per evitare doppie inclusioni da parte dello stesso nodo */
             alreadyNotified = calloc(conf.NUM_FRIENDS, sizeof(pid_t));
             notifiedCtr = 0;
+            /* INVIO LA MSGQUEUE ID COME PARAMETRO, I NODI LO AGGIUNGERANNO ALLA NODEMSGIDS + AGGIUNGERANNO myFriendsNUM
+             * come indice amico, prima di incrementarlo !*/
             /* Preparo il segnale da inviare che conterrà come valore di info il pid del nuovo arrivato */
-            sv.sival_int = nodePIDs[nodesNumber];
+            sv.sival_int = newmsgqid;
             for(i = 0; i < conf.NUM_FRIENDS; i++){
                 /* NodesNumber non è ancora incrementato, quindi otteniamo solo un nodo tra quelli già preesistenti */
-                tmppid = nodePIDs[so_random(0, nodesNumber)];
+                tmpindex = (int)so_random(0, nodesNumber);
                 for(j = 0; j < notifiedCtr; j++)
-                    if(alreadyNotified[j] == tmppid)
+                    if(alreadyNotified[j] == tmpindex)
                         break;
                 /* Se j è uguale al numero di notificati, allora il pid generato non è stato ancora notificato */
                 /* In questo modo evitiamo che un nodo preesistente aggiunga due volte il nuovo arrivato agli amici */
                 if(j == notifiedCtr)
                 {
-                    sigqueue(tmppid, SIGUSR2, sv);
-                    alreadyNotified[notifiedCtr++] = tmppid;
+                    sigqueue(nodePIDs[tmpindex], SIGUSR2, sv);
+                    alreadyNotified[notifiedCtr++] = tmpindex;
                 }
                 else
                     i--;

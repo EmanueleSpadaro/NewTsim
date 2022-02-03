@@ -29,7 +29,7 @@ static int getMyBudget();
 
 static tmessage genRandomTmsg(int budget);
 static void sendManualTransaction();
-void handleMessageU(tmessage *tmsg);
+static void handleMessageU(cmessage *cmsg);
 static void setupUserHandlers();
 
 void userRoutine()
@@ -41,6 +41,7 @@ void userRoutine()
     int myRetry = conf.RETRY;
     int myBudget;
     tmessage tmsg;
+    cmessage cmsg;
 
     while(myRetry > 0)
     {
@@ -59,14 +60,10 @@ void userRoutine()
             /* Inviamo al nodo estratto la transazione e attendiamo un intervallo di tempo casuale */
             /* Se non riusciamo ad inviare la transazione, non la aggiungiamo alla pending list e decrementiamo retry */
             //fprintf(stderr,"[%i] Trying to send\n", getpid());
-            if(trysendtmessage(tmsg) == -1)
-            {
-                //fprintf(stderr,"[%i] Could not send\n", getpid());
+            if(trysendtmessage(tmsg, (int)so_random(0, nodesNumber)) == -1)
                 myRetry--;
-            }
             else
             {
-                //fprintf(stderr,"[%i] Sent successfully\n", getpid());
                 /* Siamo riusciti ad inviarla, resettiamo al valore di fallimenti consecutivi consentito */
                 myRetry = conf.RETRY;
                 addPending(tmsg.transaction);
@@ -77,10 +74,10 @@ void userRoutine()
         }
         else
         {
-            waittmessage(&tmsg);
-            handleMessageU(&tmsg);
-            while(checktmessage(&tmsg) != -1)
-                handleMessageU(&tmsg);
+            waitcmessage(&cmsg);
+            handleMessageU(&cmsg);
+            while(checkcmessage(&cmsg) != -1)
+                handleMessageU(&cmsg);
         }
         unblocksignal(SIGUSR1); /* Prevenzione inconsistenza budget con transazioni manuali */
         unblocksignal(SIGUSR2); /* Preveniamo che le update dei nodi non interrompano le system call */
@@ -90,14 +87,14 @@ void userRoutine()
     exit(EXIT_SUCCESS);
 }
 
-void handleMessageU(tmessage *tmsg) {
-    switch ((*tmsg).object) {
-        case TMEX_TP_FULL:
+static void handleMessageU(cmessage *cmsg) {
+    switch ((*cmsg).object) {
+        case CMEX_TP_FULL:
         {
-            removePending((*tmsg).transaction);
+            removePending((*cmsg).transaction);
             break;
         }
-        case TMEX_NEW_BLOCK:
+        case CMEX_NEW_BLOCK:
         {
             break;
         }
@@ -121,7 +118,6 @@ static tmessage genRandomTmsg(int budget)
     int tmp;
     pid_t tmpPid;
     tmessage tmsg;
-    tmsg.recipient = nodePIDs[so_random(0, nodesNumber)];
     tmsg.object = TMEX_PROCESS_RQST;
     /* Il totale che spenderemo per la transazione */
     tmp = (int)so_random(2, budget+1);
@@ -235,7 +231,7 @@ static void sendManualTransaction()
         /* Avendo budget >= 2, generiamo una transazione*/
         tmsg = genRandomTmsg(myBudget);
         /* Inviamo al nodo estratto la transazione e attendiamo un intervallo di tempo casuale */
-        if(trysendtmessage(tmsg) != -1)
+        if(trysendtmessage(tmsg, (int)so_random(0, nodesNumber)) != -1)
             addPending(tmsg.transaction);
         nsleep(so_random(conf.MIN_TRANS_GEN_NSEC, conf.MAX_TRANS_GEN_NSEC));
     }
@@ -243,8 +239,12 @@ static void sendManualTransaction()
 
 static void friendsUpdateHandler(int sig, siginfo_t *si, void *ucontext)
 {
-    nodePIDs = reallocarray(nodePIDs, nodesNumber+1, sizeof(pid_t));
-    nodePIDs[nodesNumber++] = si->si_value.sival_int;
+    extern int *nodemsgids;
+    nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
+    /* Il segnale contiene il msgid del nuovo nodo, incrementiamo pure il contatore dei nodi per poter ottenere
+     * l'indice della nuova msgid dalla selezione casuale dell'indice di riferimento ai nodi che ricevono le nostre
+     * transazioni */
+    nodemsgids[nodesNumber++] = si->si_value.sival_int;
 }
 
 static void setupUserHandlers()

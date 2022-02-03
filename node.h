@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-pid_t spawnNode();
-int sendFriendsTo(pid_t node);
+pid_t spawnNode(int loopIndex);
+void sendFriendsTo(pid_t node, int loopIndex);
 
 #endif //NEWTSIM_NODE_H

@@ -28,7 +28,7 @@ void handleMessage(tmessage *ptr);
 
 static void setupSignalHandlers();
 
-void nodeRoutine()
+void nodeRoutine(int loopIndex)
 {
     int i, j, sum, notified;
     cmessage cmsg;
@@ -55,6 +55,7 @@ void nodeRoutine()
         }
         myFriends[myFriendsNum] = cmsg.friend;
     }
+    updateMyListeningQueue(loopIndex);
     fprintf(stderr, "[N%i] ", getpid());
     for(i = 0; i < myFriendsNum; i++)
         fprintf(stderr, "F%i ", myFriends[i]);
@@ -127,9 +128,9 @@ void nodeRoutine()
                     break;
             if(j == notified)
             {
-                tmsg.object = TMEX_NEW_BLOCK;
-                tmsg.recipient = block[i].receiver;
-                sendtmessage(tmsg);
+                cmsg.object = CMEX_NEW_BLOCK;
+                cmsg.recipient = block[i].receiver;
+                sendcmessage(cmsg);
                 notificationarray[notified++] = block[i].receiver;
             }
         }
@@ -142,6 +143,7 @@ void nodeRoutine()
 }
 
 void handleMessage(tmessage *ptr) {
+    cmessage cmsg;
     switch (ptr->object) {
         /* Se abbiamo sufficiente spazio, la aggiungiamo alla pool, sennò la rimandiamo indietro */
         case TMEX_PROCESS_RQST:
@@ -150,9 +152,10 @@ void handleMessage(tmessage *ptr) {
                 myTransactionPool[myTransactionPoolNum++] = ptr->transaction;
             else
             {
-                ptr->object = TMEX_TP_FULL;
-                ptr->recipient = ptr->transaction.sender;
-                sendtmessage(*ptr);
+                cmsg.object = CMEX_TP_FULL;
+                cmsg.recipient = ptr->transaction.sender;
+                cmsg.transaction = ptr->transaction;
+                sendcmessage(cmsg);
             }
             break;
         }
@@ -165,16 +168,15 @@ void handleMessage(tmessage *ptr) {
             {
                 /* Object is already set */
                 if(--(ptr->hops) > 0)
-                {
-                    ptr->recipient = myFriends[so_random(0, myFriendsNum)];
-                    sendtmessage(*ptr);
-                }
+                    sendtmessage(*ptr, (int)so_random(0, myFriendsNum));
                 else
                 {
                     /* HOPS hanno raggiunto 0, di conseguenza notifichiamo il master attraverso SIGUSR2 e gli inviamo
                      * la transazione da inviare al nuovo nodo che genererà come da specifiche */
-                    ptr->recipient = getppid(); /* Il parent pid è il master */
-                    sendtmessage(*ptr);
+                    cmsg.recipient = getppid();
+                    cmsg.object = CMEX_HOPS_ZERO;
+                    cmsg.transaction = ptr->transaction;
+                    sendcmessage(cmsg);
                     /* Gli inviamo il messaggio, che sarà all'interno della queue */
                     kill(getppid(), SIGUSR2);
                 }
@@ -183,7 +185,7 @@ void handleMessage(tmessage *ptr) {
         }
         default:
         {
-            fprintf(stderr, "[N%i] Received unknown %i message object from %i\n", getpid(), ptr->object,
+            fprintf(stderr, "[N%i] Received unknown %li message object from %i\n", getpid(), ptr->object,
                     ptr->transaction.sender);
             break;
         }
@@ -192,8 +194,15 @@ void handleMessage(tmessage *ptr) {
 
 static void friendsUpdateHandler(int sig, siginfo_t *si, void *ucontext)
 {
+    extern int *nodemsgids;
+    extern int nodesNumber;
+    nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
     myFriends = reallocarray(myFriends, myFriendsNum+1, sizeof(pid_t));
-    myFriends[myFriendsNum++] = si->si_value.sival_int;
+    /* Il segnale contiene il msgid del nuovo nodo */
+    nodemsgids[nodesNumber] = si->si_value.sival_int;
+    /* Aggiungiamo l'index dell'id della queue come amico a quelli già esistenti e successivamente incrementiamo
+     * sia il contatore degli amici, sia il numero dei nodi */
+    myFriends[myFriendsNum++] = nodesNumber++;
 }
 
 static void multipurposeHandler(int snum)
@@ -202,12 +211,10 @@ static void multipurposeHandler(int snum)
         case SIGALRM:
         {
             tmessage tmsg;
-            tmsg.recipient = myFriends[so_random(0, myFriendsNum)];
             tmsg.object = TMEX_GIFT_MESSAGE;
             tmsg.hops = conf.HOPS;
             tmsg.transaction = myTransactionPool[--myTransactionPoolNum];
-            fprintf(stderr, "[N%i] Sending gift to %li\n", getpid(), tmsg.recipient);
-            sendtmessage(tmsg);
+            sendtmessage(tmsg, so_random(0, myFriendsNum));
             break;
         }
         case SIGINT:
@@ -235,31 +242,31 @@ static void setupSignalHandlers()
 }
 
 
-pid_t spawnNode() {
+pid_t spawnNode(int loopIndex) {
     pid_t fValue = fork();
     if(fValue == 0)
-        nodeRoutine();
+        nodeRoutine(loopIndex);
     else
         return fValue;
 }
 
-int sendFriendsTo(pid_t node) {
-    extern pid_t *nodePIDs;
+/* It still requires a pid_t node for cmessage type, loopIndex to avoid considering our index as friend's one */
+void sendFriendsTo(pid_t node, int loopIndex) {
     extern int nodesNumber;
     int i, j, alreadySet;
-    pid_t *includedArr;
+    int *includedArr;
     cmessage cm;
     cm.recipient = node;
     cm.object = CMEX_FRIENDS_INFO;
-    includedArr = calloc(conf.NUM_FRIENDS, sizeof(pid_t));
+    includedArr = calloc(conf.NUM_FRIENDS, sizeof(int));
     alreadySet = 0;
     for (i = 0; i < conf.NUM_FRIENDS; i++)
     {
-        cm.friend = nodePIDs[so_random(0, nodesNumber)];
+        cm.friend = (int)so_random(0, nodesNumber);
         for(j = 0; j < alreadySet; j++)
             if(includedArr[j] == cm.friend)
                 break;
-        if(j == alreadySet && cm.friend != node)
+        if(j == alreadySet && cm.friend != loopIndex)
         {
             includedArr[alreadySet++] = cm.friend;
             sendcmessage(cm);

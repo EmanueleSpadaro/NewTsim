@@ -17,12 +17,6 @@
 /* IPC Read/Write Permissions */
 #define IPC_RW 0600
 
-#define TMEX_PROCESS_RQST 0x32
-#define TMEX_GIFT_MESSAGE 0x69
-#define TMEX_TP_FULL      0x24
-#define TMEX_NEW_BLOCK    0x55
-#define CMEX_FRIENDS_INFO 0x3333
-
 /* Inizializza le risorse IPC utilizzate durante la simulazione */
 int initipcs();
 
@@ -35,7 +29,6 @@ int startsyncsem();
 int syncwait();
 
 
-
 /* Struttura che definisce una transazione all'interno della simulazione */
 typedef struct {
     long timestamp;
@@ -45,29 +38,41 @@ typedef struct {
     int reward;
 } transaction;
 
+int updateMyListeningQueue(int i);
+
+#define TMEX_PROCESS_RQST 0x32
+#define TMEX_GIFT_MESSAGE 0x69
+#define tsender transaction.sender
 /* Struttura che definisce la struttura dei messaggi all'interno della message queue */
 /* Utilizziamo il valore del tipo di messaggio come slot per indicare il destinatario */
 typedef struct {
-    long recipient;
-    int object;
+    long object;
     transaction transaction;
     int hops;
 } tmessage;
 
+#define CMEX_FRIENDS_INFO   0x3333
+#define CMEX_TP_FULL        0x24
+#define CMEX_NEW_BLOCK      0x55
+#define CMEX_HOPS_ZERO      0x71
 /* Struttura che definisce la struttura dei messaggi contenente gli amici per i nodi */
 /* La union non è*/
 typedef struct {
     long recipient;
     int object;
-    pid_t friend;
+    int friend; /* Index of friend message queue id inside of the array */
+    transaction transaction;
 } cmessage;
 
-int trysendtmessage(tmessage tm);
-int sendtmessage(tmessage tm);
+
+int trysendtmessage(tmessage tm, int index);
+int sendtmessage(tmessage tm, int index);
 int waittmessage(tmessage *tm);
 int checktmessage(tmessage *tm);
 int sendcmessage(cmessage cm);
 int waitcmessage(cmessage *cm);
+int checkcmessage(cmessage *cm);
+int allocnewmsgq();
 
 int waitbookwrite();
 int endbookwrite();
