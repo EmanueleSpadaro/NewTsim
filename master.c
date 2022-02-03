@@ -203,11 +203,6 @@ static void printstatus(int secs)
         {
             printf("[USER %d] Accounted Balance: %d\n", userPIDs[i], user_budgets[i]);
         }
-        printf("\n");
-        for(i = 0; i < conf.NODES_NUM; i++)
-        {
-            printf("[NODE %d] Accounted Balance: %d\n", nodePIDs[i], node_budgets[i]);
-        }
     }
     else {
         /* Con questi teniamo conto del più povero per poter avere i più ricchi nell'array */
@@ -305,6 +300,9 @@ static void printstatus(int secs)
         for (i = 0; i < MAXPOORNODES; i++)
             printf("[USER %d] Accounted Balance: %d\n", poorArrPids[i], poorArr[i]);
     }
+    printf("\n");
+    for(i = 0; i < conf.NODES_NUM; i++)
+            printf("[NODE %d] Accounted Balance: %d\n", nodePIDs[i], node_budgets[i]);
     printf("=====================================================\n");
 }
 

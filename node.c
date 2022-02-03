@@ -1,6 +1,6 @@
-//
-// Created by maffin on 1/31/22.
-//
+/*
+ Created by maffin on 1/31/22.
+*/
 
 #include "node.h"
 #include "shared/so_conf.h"
@@ -35,12 +35,13 @@ void nodeRoutine(int loopIndex)
     cmessage cmsg;
     tmessage tmsg;
     transaction t;
+    transaction *block;
     pid_t *notificationarray;   /* To prevent notification flood to the same user regarding the same block update */
     setupSignalHandlers();
     srandom(time(NULL) ^ (getpid()<<16));
 
     notificationarray = calloc(conf.USERS_NUM, sizeof(pid_t));
-    transaction *block = calloc(conf.BLOCK_SIZE, sizeof(transaction));
+    block = calloc(conf.BLOCK_SIZE, sizeof(transaction));
     myTransactionPool = calloc(conf.TP_SIZE, sizeof(transaction));
     /* We initialize our friends array to store base friends */
     myFriends = calloc(conf.NUM_FRIENDS, sizeof(pid_t));

@@ -1,6 +1,6 @@
-//
-// Created by maffin on 1/31/22.
-//
+/*
+ Created by maffin on 1/31/22.
+*/
 
 #ifndef NEWTSIM_SO_CONF_H
 #define NEWTSIM_SO_CONF_H
@@ -142,4 +142,4 @@ void printconf(conf_t conf);
 #define SO_HOPS_2 2
 #define SO_HOPS_3 10
 
-#endif //NEWTSIM_SO_CONF_H
+#endif

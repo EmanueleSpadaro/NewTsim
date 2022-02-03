@@ -1,6 +1,6 @@
-//
-// Created by maffin on 1/31/22.
-//
+/*
+ Created by maffin on 1/31/22.
+*/
 
 #ifndef NEWTSIM_SO_RANDOM_H
 #define NEWTSIM_SO_RANDOM_H
@@ -15,4 +15,4 @@ void nsleep(long nsecs);
 /* Sets an alarm timer that sends a SIGALRM each nsecs */
 timer_t setalarmtimer(long nsecs);
 
-#endif //NEWTSIM_SO_RANDOM_H
+#endif

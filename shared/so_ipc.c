@@ -1,6 +1,6 @@
-//
-// Created by maffin on 1/31/22.
-//
+/*
+ Created by maffin on 1/31/22.
+*/
 
 #include "so_ipc.h"
 #include "so_conf.h"
@@ -31,7 +31,7 @@ pid_t *userPIDs;
 #define IFERRNORETIT if(errno){ return errno; }
 
 int initipcs() {
-    int i;
+    int i, memsize, mbooksize;
     /* We get 3 System-V Semaphores, one for sync, two for read/write on MasterBook */
     semid = semget(IPC_PRIVATE, 3, IPC_CREAT | IPC_EXCL | IPC_RW);
     /* If errno has a value, we stop operating with the semaphore and return errno */
@@ -56,14 +56,14 @@ int initipcs() {
     }
 
 
-    int memsize = sizeof(pid_t) * conf.USERS_NUM;
+    memsize = sizeof(pid_t) * conf.USERS_NUM;
     /*
      * Allocating enough for the structs and the arrays
      * [sizeof(masterbook) + ( sizeof(transaction*) * REGISTER_SIZE) + (sizeof(transaction) * BLOCK_SIZE)]
      * ^(struct masterbook)^         (space for BLOCK pointers)      ^  (space for Blocks' Transactions  )
      * BASE           BLOCK* POINTERS                    TRANSACTIONS POINTED BY BLOCKs*
      */
-    int mbooksize = sizeof(masterbook) + (sizeof(transaction *) * conf.REGISTRY_SIZE)
+    mbooksize = sizeof(masterbook) + (sizeof(transaction *) * conf.REGISTRY_SIZE)
                     + (sizeof(transaction) * conf.BLOCK_SIZE * conf.REGISTRY_SIZE);
     /* We get a properly sized shared memory for storing the master book and users */
     shmid = shmget(IPC_PRIVATE, memsize + mbooksize, IPC_CREAT | IPC_EXCL | IPC_RW);

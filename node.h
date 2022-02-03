@@ -1,6 +1,6 @@
-//
-// Created by maffin on 1/31/22.
-//
+/*
+ Created by maffin on 1/31/22.
+*/
 
 #ifndef NEWTSIM_NODE_H
 #define NEWTSIM_NODE_H
@@ -11,4 +11,4 @@
 pid_t spawnNode(int loopIndex);
 void sendFriendsTo(pid_t node, int loopIndex);
 
-#endif //NEWTSIM_NODE_H
+#endif

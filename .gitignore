@@ -1,2 +1,7 @@
 cmake-build-debug/
 .idea/
+build/
+.vscode/
+*.json
+*.o
+NewTsim

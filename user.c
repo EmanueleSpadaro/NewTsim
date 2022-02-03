@@ -1,6 +1,6 @@
-//
-// Created by maffin on 2/1/22.
-//
+/*
+ Created by maffin on 2/1/22.
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -34,14 +34,13 @@ static void setupUserHandlers();
 
 void userRoutine()
 {
+    int myRetry, myBudget;
+    tmessage tmsg;
+    cmessage cmsg;
     srandom(time(NULL) ^ (getpid()<<16));
     syncwait();
     setupUserHandlers();
-
-    int myRetry = conf.RETRY;
-    int myBudget;
-    tmessage tmsg;
-    cmessage cmsg;
+    myRetry = conf.RETRY;
 
 
     while(myRetry > 0)
