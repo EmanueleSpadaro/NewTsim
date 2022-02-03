@@ -43,13 +43,13 @@ void userRoutine()
     tmessage tmsg;
     cmessage cmsg;
 
+
     while(myRetry > 0)
     {
         /* 1. Calcolo il bilancio corrente a partire dal budget iniziale, facendo la somma algebrica delle entrate
          * e delle uscite registrate nelle transazioni presenti nel libro mastro, sottraendo gli importi delle
          * transazioni spedite, ma non ancora registrate nel libro mastro */
         blocksignal(SIGUSR1);   /* Preveniamo transazioni manuali che possano rendere inconsistente il budget */
-        blocksignal(SIGUSR2);   /* Preveniamo che le update dei nodi non interrompano le system call */
         myBudget = getMyBudget();
         //fprintf(stderr,"[%i] Got my budget\n", getpid());
         if(myBudget >= 2)
@@ -80,14 +80,15 @@ void userRoutine()
                 handleMessageU(&cmsg);
         }
         unblocksignal(SIGUSR1); /* Prevenzione inconsistenza budget con transazioni manuali */
-        unblocksignal(SIGUSR2); /* Preveniamo che le update dei nodi non interrompano le system call */
     }
-    fprintf(stderr, "Exiting because of so-retry\n");
-    kill(getppid(), SIGUSR1);
+    cmsg.object = CMEX_USER_EXIT;
+    cmsg.recipient = getppid();
+    sendcmessage(cmsg);
     exit(EXIT_SUCCESS);
 }
 
 static void handleMessageU(cmessage *cmsg) {
+    extern int *nodemsgids;
     switch ((*cmsg).object) {
         case CMEX_TP_FULL:
         {
@@ -96,6 +97,15 @@ static void handleMessageU(cmessage *cmsg) {
         }
         case CMEX_NEW_BLOCK:
         {
+            break;
+        }
+        case CMEX_NEW_NODE:
+        {
+            nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
+            /* Il messaggio contiene il msgid del nuovo nodo in friends, incrementiamo pure il contatore dei nodi per poter ottenere
+             * l'indice della nuova msgid dalla selezione casuale dell'indice di riferimento ai nodi che ricevono le nostre
+             * transazioni */
+            nodemsgids[nodesNumber++] = cmsg->friend;
             break;
         }
         default:
@@ -237,23 +247,8 @@ static void sendManualTransaction()
     }
 }
 
-static void friendsUpdateHandler(int sig, siginfo_t *si, void *ucontext)
-{
-    extern int *nodemsgids;
-    nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
-    /* Il segnale contiene il msgid del nuovo nodo, incrementiamo pure il contatore dei nodi per poter ottenere
-     * l'indice della nuova msgid dalla selezione casuale dell'indice di riferimento ai nodi che ricevono le nostre
-     * transazioni */
-    nodemsgids[nodesNumber++] = si->si_value.sival_int;
-}
 
 static void setupUserHandlers()
 {
-    struct sigaction sa;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = friendsUpdateHandler;
-    sigaction(SIGUSR2, &sa, NULL);
     signal(SIGUSR1, sendManualTransaction);
-
 }

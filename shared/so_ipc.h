@@ -42,6 +42,7 @@ int updateMyListeningQueue(int i);
 
 #define TMEX_PROCESS_RQST 0x32
 #define TMEX_GIFT_MESSAGE 0x69
+#define TMEX_NEW_NODE     0xAAAA
 #define tsender transaction.sender
 /* Struttura che definisce la struttura dei messaggi all'interno della message queue */
 /* Utilizziamo il valore del tipo di messaggio come slot per indicare il destinatario */
@@ -55,6 +56,9 @@ typedef struct {
 #define CMEX_TP_FULL        0x24
 #define CMEX_NEW_BLOCK      0x55
 #define CMEX_HOPS_ZERO      0x71
+#define CMEX_USER_EXIT      0xEEEE
+#define CMEX_NODE_EXIT_INFO 0xBBBB
+#define CMEX_NEW_NODE       TMEX_NEW_NODE
 /* Struttura che definisce la struttura dei messaggi contenente gli amici per i nodi */
 /* La union non è*/
 typedef struct {

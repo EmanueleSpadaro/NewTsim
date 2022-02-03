@@ -26,6 +26,7 @@ static sig_atomic_t myTransactionPoolNum = 0;
 
 void handleMessage(tmessage *ptr);
 
+static void multipurposeHandler(int snum);
 static void setupSignalHandlers();
 
 void nodeRoutine(int loopIndex)
@@ -56,10 +57,6 @@ void nodeRoutine(int loopIndex)
         myFriends[myFriendsNum] = cmsg.friend;
     }
     updateMyListeningQueue(loopIndex);
-    fprintf(stderr, "[N%i] ", getpid());
-    for(i = 0; i < myFriendsNum; i++)
-        fprintf(stderr, "F%i ", myFriends[i]);
-    fprintf(stderr, "\n");
     /* We wait for the entire simulation to be ready */
     syncwait();
 
@@ -74,9 +71,7 @@ void nodeRoutine(int loopIndex)
             if(waittmessage(&tmsg) == -1)
                 continue;
             blocksignal(SIGALRM);
-            blocksignal(SIGUSR2);
             handleMessage(&tmsg);
-            unblocksignal(SIGUSR2);
             unblocksignal(SIGALRM);
         }
         blocksignal(SIGALRM);
@@ -110,7 +105,9 @@ void nodeRoutine(int loopIndex)
         if(mbook->n_blocks == conf.REGISTRY_SIZE)
         {
             endbookwrite();
-            exit(EXIT_SUCCESS);
+            /* Utilizziamo l'handler per gestire la chiusura e inviare le info necessarie al master */
+            multipurposeHandler(SIGINT);
+            /* L'handler di sigint si occuperà anche di terminare la nostra esecuzione */
         }
         for(i = 0; i < conf.BLOCK_SIZE; i++)
         {
@@ -143,6 +140,8 @@ void nodeRoutine(int loopIndex)
 }
 
 void handleMessage(tmessage *ptr) {
+    extern int *nodemsgids;
+    extern int nodesNumber;
     cmessage cmsg;
     switch (ptr->object) {
         /* Se abbiamo sufficiente spazio, la aggiungiamo alla pool, sennò la rimandiamo indietro */
@@ -161,7 +160,6 @@ void handleMessage(tmessage *ptr) {
         }
         case TMEX_GIFT_MESSAGE:
         {
-            fprintf(stderr, "[%i] Received gift\n", getpid());
             if(myTransactionPoolNum < conf.TP_SIZE)
                 myTransactionPool[myTransactionPoolNum++] = ptr->transaction;
             else
@@ -171,16 +169,25 @@ void handleMessage(tmessage *ptr) {
                     sendtmessage(*ptr, (int)so_random(0, myFriendsNum));
                 else
                 {
-                    /* HOPS hanno raggiunto 0, di conseguenza notifichiamo il master attraverso SIGUSR2 e gli inviamo
+                    /* HOPS hanno raggiunto 0, di conseguenza inviamo un messaggio di richiesta al master e gli inviamo
                      * la transazione da inviare al nuovo nodo che genererà come da specifiche */
                     cmsg.recipient = getppid();
                     cmsg.object = CMEX_HOPS_ZERO;
                     cmsg.transaction = ptr->transaction;
                     sendcmessage(cmsg);
-                    /* Gli inviamo il messaggio, che sarà all'interno della queue */
-                    kill(getppid(), SIGUSR2);
                 }
             }
+            break;
+        }
+        case TMEX_NEW_NODE:
+        {
+            nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
+            myFriends = reallocarray(myFriends, myFriendsNum+1, sizeof(pid_t));
+            /* Il campo hops contiene il msgid del nuovo nodo */
+            nodemsgids[nodesNumber] = ptr->hops;
+            /* Aggiungiamo l'index dell'id della queue come amico a quelli già esistenti e successivamente incrementiamo
+             * sia il contatore degli amici, sia il numero dei nodi */
+            myFriends[myFriendsNum++] = nodesNumber++;
             break;
         }
         default:
@@ -192,21 +199,9 @@ void handleMessage(tmessage *ptr) {
     }
 }
 
-static void friendsUpdateHandler(int sig, siginfo_t *si, void *ucontext)
-{
-    extern int *nodemsgids;
-    extern int nodesNumber;
-    nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
-    myFriends = reallocarray(myFriends, myFriendsNum+1, sizeof(pid_t));
-    /* Il segnale contiene il msgid del nuovo nodo */
-    nodemsgids[nodesNumber] = si->si_value.sival_int;
-    /* Aggiungiamo l'index dell'id della queue come amico a quelli già esistenti e successivamente incrementiamo
-     * sia il contatore degli amici, sia il numero dei nodi */
-    myFriends[myFriendsNum++] = nodesNumber++;
-}
-
 static void multipurposeHandler(int snum)
 {
+    cmessage cmsg;
     switch (snum) {
         case SIGALRM:
         {
@@ -219,8 +214,11 @@ static void multipurposeHandler(int snum)
         }
         case SIGINT:
         {
-            printf("[Node %d] Exiting with %i/%i/%i transactions in pool\n",
-                   getpid(), myTransactionPoolNum, conf.BLOCK_SIZE, conf.TP_SIZE);
+            cmsg.object = CMEX_NODE_EXIT_INFO;
+            cmsg.friend = myTransactionPoolNum;
+            cmsg.recipient = getppid();
+            cmsg.transaction.sender = getpid();
+            sendcmessage(cmsg);
             exit(EXIT_SUCCESS);
         }
         default:
@@ -232,11 +230,6 @@ static void multipurposeHandler(int snum)
 
 static void setupSignalHandlers()
 {
-    struct sigaction sa;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = friendsUpdateHandler;
-    sigaction(SIGUSR2, &sa, NULL);
     signal(SIGALRM, multipurposeHandler);
     signal(SIGINT, multipurposeHandler);
 }
