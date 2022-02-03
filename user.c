@@ -51,15 +51,12 @@ void userRoutine()
          * transazioni spedite, ma non ancora registrate nel libro mastro */
         blocksignal(SIGUSR1);   /* Preveniamo transazioni manuali che possano rendere inconsistente il budget */
         myBudget = getMyBudget();
-        //fprintf(stderr,"[%i] Got my budget\n", getpid());
         if(myBudget >= 2)
         {
             /* Avendo budget >= 2, generiamo una transazione*/
-            //fprintf(stderr,"[%i] Generating transaction\n", getpid());
             tmsg = genRandomTmsg(myBudget);
             /* Inviamo al nodo estratto la transazione e attendiamo un intervallo di tempo casuale */
             /* Se non riusciamo ad inviare la transazione, non la aggiungiamo alla pending list e decrementiamo retry */
-            //fprintf(stderr,"[%i] Trying to send\n", getpid());
             if(trysendtmessage(tmsg, (int)so_random(0, nodesNumber)) == -1)
                 myRetry--;
             else
@@ -68,9 +65,7 @@ void userRoutine()
                 myRetry = conf.RETRY;
                 addPending(tmsg.transaction);
             }
-            //fprintf(stderr,"[%i] Waiting pseudo gen\n", getpid());
             nsleep(so_random(conf.MIN_TRANS_GEN_NSEC, conf.MAX_TRANS_GEN_NSEC));
-            //fprintf(stderr,"[%i] Pseudo Gen Completed\n", getpid());
         }
         else
         {

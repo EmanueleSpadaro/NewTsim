@@ -209,7 +209,7 @@ static void multipurposeHandler(int snum)
             tmsg.object = TMEX_GIFT_MESSAGE;
             tmsg.hops = conf.HOPS;
             tmsg.transaction = myTransactionPool[--myTransactionPoolNum];
-            sendtmessage(tmsg, so_random(0, myFriendsNum));
+            sendtmessage(tmsg, (int)so_random(0, myFriendsNum));
             break;
         }
         case SIGINT:
