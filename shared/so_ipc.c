@@ -25,9 +25,9 @@ static int ilistenfrom;
 /* Non statico, per permettere di accedervi e gestire l'evento di un nuovo nodo differentemente
  * tra user, node, master*/
 int *nodemsgids;
+static int *usermsgids;
 
 pid_t *userPIDs;
-
 #define IFERRNORETIT if(errno){ return errno; }
 
 int initipcs() {
@@ -54,7 +54,12 @@ int initipcs() {
         nodemsgids[i] = msgget(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | IPC_RW);
         IFERRNORETIT
     }
-
+    usermsgids = calloc(conf.USERS_NUM, sizeof(int));
+    for(i = 0; i < conf.USERS_NUM; i++)
+    {
+        usermsgids[i] = msgget(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | IPC_RW);
+        IFERRNORETIT
+    }
 
     memsize = sizeof(pid_t) * conf.USERS_NUM;
     /*
@@ -84,6 +89,8 @@ int releaseipcs() {
     int errOR = 0, i;
     for(i = 0; i < nodesNumber; i++)
         errOR |= msgctl(nodemsgids[i], IPC_RMID, 0);
+    for(i = 0; i < conf.USERS_NUM; i++)
+        errOR |= msgctl(usermsgids[i], IPC_RMID, 0);
     return errOR
     | msgctl(ctrlmsgid, IPC_RMID, 0)
     | shmctl(shmid, IPC_RMID, 0)
@@ -114,32 +121,74 @@ int syncwait() {
     return 0;
 }
 
-int updateMyListeningQueue(int i)
+int updateMyListeningQueue(int i, short type)
 {
-    ilistenfrom = nodemsgids[i];
-}
-
-int sendcmessage(cmessage cm) {
-    return msgsnd(ctrlmsgid, &cm, sizeof(cm) - sizeof(long), 0);
+    switch (type)
+    {
+        case UPDATE_AS_NODE:
+        {
+            ilistenfrom = nodemsgids[i];
+            break;
+        }
+        case UPDATE_AS_USER:
+        {
+            ilistenfrom = usermsgids[i];
+            break;
+        }
+        default:
+        {
+            fprintf(stderr, "Unknown queue type @ updateMyListeningQueue");
+            break;
+        }
+    }
+    return ilistenfrom;
 }
 
 /* Il tipo rappresenta effettivamente l'object, l'index è l'indirizzo relativo all'array delle queue dei nodi */
-int trysendtmessage(tmessage tm, int index)
+int trysendtmessage(tmessage tm, int index, short toConst)
 {
-    return msgsnd(nodemsgids[index], &tm, sizeof(tm) - sizeof(long), IPC_NOWAIT);
+    switch(toConst)
+    {
+        case TO_USER:
+        {
+            return msgsnd(usermsgids[index], &tm, sizeof(tm) - sizeof(long), IPC_NOWAIT);
+        }
+        case TO_NODE:
+        {
+            return msgsnd(nodemsgids[index], &tm, sizeof(tm) - sizeof(long), IPC_NOWAIT);
+        }
+        case TO_MSTR:
+        {
+            return msgsnd(ctrlmsgid, &tm, sizeof(tm) - sizeof(long), IPC_NOWAIT);
+        }
+        default:
+        {
+            fprintf(stderr, "Unknown TO constant passed to trysendtmessage\n");
+        }
+    }
 }
 
 /* Il tipo rappresenta effettivamente l'object, l'index è l'indirizzo relativo all'array delle queue dei nodi */
-int sendtmessage(tmessage tm, int index) {
-    return msgsnd(nodemsgids[index], &tm, sizeof(tm) - sizeof(long), 0);
-}
-
-/* La ctrlmsg è comune, il tipo deve essere il pid per differenziare */
-int waitcmessage(cmessage *cm) {
-    return msgrcv(ctrlmsgid, cm, sizeof(*cm) - sizeof(long), getpid(), 0);
-}
-int checkcmessage(cmessage *cm) {
-    return msgrcv(ctrlmsgid, cm, sizeof(*cm) - sizeof(long), getpid(), IPC_NOWAIT);
+int sendtmessage(tmessage tm, int index, short toConst) {
+    switch(toConst)
+    {
+        case TO_USER:
+        {
+            return msgsnd(usermsgids[index], &tm, sizeof(tm) - sizeof(long), 0);
+        }
+        case TO_NODE:
+        {
+            return msgsnd(nodemsgids[index], &tm, sizeof(tm) - sizeof(long), 0);
+        }
+        case TO_MSTR:
+        {
+            return msgsnd(ctrlmsgid, &tm, sizeof(tm) - sizeof(long), 0);
+        }
+        default:
+        {
+            fprintf(stderr, "Unknown TO constant passed to sendtmessage\n");
+        }
+    }
 }
 
 /* Solo i nodi aspettano per i tmessage ed hanno una personale coda di messaggi, da qui ilistenfrom e msgtyp 0*/

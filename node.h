@@ -9,6 +9,6 @@
 #include <sys/types.h>
 
 pid_t spawnNode(int loopIndex);
-void sendFriendsTo(pid_t node, int loopIndex);
+void sendFriendsTo(int loopIndex);
 
 #endif

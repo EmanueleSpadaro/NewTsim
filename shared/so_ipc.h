@@ -38,44 +38,34 @@ typedef struct {
     int reward;
 } transaction;
 
-int updateMyListeningQueue(int i);
+#define UPDATE_AS_NODE 0x0D
+#define UPDATE_AS_USER 0xE
+int updateMyListeningQueue(int i, short type);
 
 #define TMEX_PROCESS_RQST 0x32
 #define TMEX_GIFT_MESSAGE 0x69
 #define TMEX_NEW_NODE     0xAAAA
-#define tsender transaction.sender
+#define TMEX_FRIENDS_INFO   0x3333
+#define TMEX_TP_FULL        0x24
+#define TMEX_NEW_BLOCK      0x55
+#define TMEX_HOPS_ZERO      0x71
+#define TMEX_USER_EXIT      0xEEEE
+#define TMEX_NODE_EXIT_INFO 0xBBBB
 /* Struttura che definisce la struttura dei messaggi all'interno della message queue */
 /* Utilizziamo il valore del tipo di messaggio come slot per indicare il destinatario */
 typedef struct {
     long object;
     transaction transaction;
-    int hops;
+    int value;
 } tmessage;
 
-#define CMEX_FRIENDS_INFO   0x3333
-#define CMEX_TP_FULL        0x24
-#define CMEX_NEW_BLOCK      0x55
-#define CMEX_HOPS_ZERO      0x71
-#define CMEX_USER_EXIT      0xEEEE
-#define CMEX_NODE_EXIT_INFO 0xBBBB
-#define CMEX_NEW_NODE       TMEX_NEW_NODE
-/* Struttura che definisce la struttura dei messaggi contenente gli amici per i nodi */
-/* La union non è*/
-typedef struct {
-    long recipient;
-    int object;
-    int friend; /* Index of friend message queue id inside of the array */
-    transaction transaction;
-} cmessage;
-
-
-int trysendtmessage(tmessage tm, int index);
-int sendtmessage(tmessage tm, int index);
+#define TO_NODE 0x1
+#define TO_USER 0x2
+#define TO_MSTR 0x3
+int trysendtmessage(tmessage tm, int index, short toConst);
+int sendtmessage(tmessage tm, int index, short toConst);
 int waittmessage(tmessage *tm);
 int checktmessage(tmessage *tm);
-int sendcmessage(cmessage cm);
-int waitcmessage(cmessage *cm);
-int checkcmessage(cmessage *cm);
 int allocnewmsgq();
 
 int waitbookwrite();
