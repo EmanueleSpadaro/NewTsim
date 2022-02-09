@@ -22,6 +22,7 @@ pid_t *nodePIDs;
 int nodesNumber;
 char sigint = 0;
 
+
 /* Struttura per agevolare la gestione delle informazioni di uscita ed evitare due array paralleli */
 struct node_exit_info
 {
@@ -158,9 +159,7 @@ static int computeblockbudget(int index, int blockNumber, int toConst)
         for (i = 0; i < conf.BLOCK_SIZE - 1; i++)
         {
             if (mbook->blocks[blockNumber][i].sender == index)
-            {
                 user_budgets[index] -= (mbook->blocks[blockNumber][i].quantity + mbook->blocks[blockNumber][i].reward);
-            }
             else if (mbook->blocks[blockNumber][i].receiver == index)
                 user_budgets[index] += (mbook->blocks[blockNumber][i].quantity);
         }

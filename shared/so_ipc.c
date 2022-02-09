@@ -144,7 +144,6 @@ int updateMyListeningQueue(int i, short type)
     return ilistenfrom;
 }
 
-/* Il tipo rappresenta effettivamente l'object, l'index è l'indirizzo relativo all'array delle queue dei nodi */
 int trysendtmessage(tmessage tm, int index, short toConst)
 {
     switch(toConst)
@@ -168,7 +167,6 @@ int trysendtmessage(tmessage tm, int index, short toConst)
     }
 }
 
-/* Il tipo rappresenta effettivamente l'object, l'index è l'indirizzo relativo all'array delle queue dei nodi */
 int sendtmessage(tmessage tm, int index, short toConst) {
     switch(toConst)
     {
@@ -191,11 +189,10 @@ int sendtmessage(tmessage tm, int index, short toConst) {
     }
 }
 
-/* Solo i nodi aspettano per i tmessage ed hanno una personale coda di messaggi, da qui ilistenfrom e msgtyp 0*/
 int waittmessage(tmessage *tm) {
     return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), 0, 0);
 }
-/* Solo i nodi aspettano per i tmessage ed hanno una personale coda di messaggi, da qui ilistenfrom e msgtyp 0*/
+
 int checktmessage(tmessage *tm) {
     return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), 0, IPC_NOWAIT);
 }

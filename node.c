@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#define GIFTNSEC 500000000
+#define GIFTNSEC 200000000
 #define REWARDSENDER -1
 
 extern conf_t conf;
@@ -111,11 +111,7 @@ void nodeRoutine(int loopIndex)
         for (i = 0; i < conf.BLOCK_SIZE; i++)
         {
             mbook->blocks[mbook->n_blocks][i] = block[i];
-            /*printf("[+%d@%d | -%d@%d]", block[i].quantity,
-            block[i].receiver, block[i].quantity + block[i].reward,
-            block[i].sender);*/
         }
-        /*puts("");*/
         mbook->n_blocks++;
         endbookwrite();
 
@@ -135,8 +131,6 @@ void nodeRoutine(int loopIndex)
         }
         unblocksignal(SIGALRM);
     }
-
-    printf("[%i] Finalmente posso fare qualcosa\n", getpid());
     exit(EXIT_SUCCESS);
 }
 
