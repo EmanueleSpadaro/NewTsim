@@ -48,7 +48,7 @@ void printconf(conf_t conf);
 #define SO_BLOCK_SIZE_3 10
 #ifndef SO_BLOCK_SIZE
 /* This macro specifies node's blocks size */
-#define SO_BLOCK_SIZE 10
+#define SO_BLOCK_SIZE SO_BLOCK_SIZE_1
 #endif
 
 #define SO_REGISTRY_SIZE_1 1000
@@ -56,7 +56,7 @@ void printconf(conf_t conf);
 #define SO_REGISTRY_SIZE_3 1000
 #ifndef SO_REGISTRY_SIZE
 /* This macro specifies master's book block capacity */
-#define SO_REGISTRY_SIZE 2
+#define SO_REGISTRY_SIZE SO_REGISTRY_SIZE_1
 #endif
 
 
