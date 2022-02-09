@@ -56,7 +56,7 @@ void printconf(conf_t conf);
 #define SO_REGISTRY_SIZE_3 1000
 #ifndef SO_REGISTRY_SIZE
 /* This macro specifies master's book block capacity */
-#define SO_REGISTRY_SIZE SO_REGISTRY_SIZE_1
+#define SO_REGISTRY_SIZE 2
 #endif
 
 

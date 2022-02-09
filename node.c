@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#define GIFTNSEC 500000000
+#define GIFTNSEC 200000000
 #define REWARDSENDER -1
 
 extern conf_t conf;
@@ -22,8 +22,6 @@ static sig_atomic_t myFriendsNum = 0;
 static transaction *myTransactionPool;
 static sig_atomic_t myTransactionPoolNum = 0;
 
-
-
 void handleMessage(tmessage *ptr);
 
 static void multipurposeHandler(int snum);
@@ -32,13 +30,13 @@ static void setupSignalHandlers();
 void nodeRoutine(int loopIndex)
 {
     int i, j, sum, notified;
-    cmessage cmsg;
     tmessage tmsg;
     transaction t;
     transaction *block;
-    pid_t *notificationarray;   /* To prevent notification flood to the same user regarding the same block update */
+    pid_t *notificationarray; /* To prevent notification flood to the same user regarding the same block update */
     setupSignalHandlers();
-    srandom(time(NULL) ^ (getpid()<<16));
+    srandom(time(NULL) ^ (getpid() << 16));
+    updateMyListeningQueue(loopIndex, UPDATE_AS_NODE);
 
     notificationarray = calloc(conf.USERS_NUM, sizeof(pid_t));
     block = calloc(conf.BLOCK_SIZE, sizeof(transaction));
@@ -48,52 +46,52 @@ void nodeRoutine(int loopIndex)
     /* We wait for control messages containing friends infos */
     for (myFriendsNum = 0; myFriendsNum < conf.NUM_FRIENDS; myFriendsNum++)
     {
-        waitcmessage(&cmsg);
-        if(cmsg.object != CMEX_FRIENDS_INFO)
+        waittmessage(&tmsg);
+        if (tmsg.object != TMEX_FRIENDS_INFO)
         {
             fprintf(stderr, "[N%i] Quitting because of unexpected message when waiting for friends\n",
                     getpid());
             exit(EXIT_FAILURE);
         }
-        myFriends[myFriendsNum] = cmsg.friend;
+        myFriends[myFriendsNum] = tmsg.value;
     }
-    updateMyListeningQueue(loopIndex);
     /* We wait for the entire simulation to be ready */
     syncwait();
 
     /* We setup the alarm timer to gift each nsec times */
-    setalarmtimer(GIFTNSEC);
+    if (conf.NUM_FRIENDS > 0)
+        setalarmtimer(GIFTNSEC);
     /* We now can proceed to listen */
-    while(!sigint)
+    while (!sigint)
     {
         /* Resto in waiting fino ad avere sufficienti transazioni per emettere un blocco */
-        while(myTransactionPoolNum < conf.BLOCK_SIZE - 1)
+        while (myTransactionPoolNum < conf.BLOCK_SIZE - 1)
         {
-            if(waittmessage(&tmsg) == -1)
+            if (waittmessage(&tmsg) == -1)
                 continue;
             blocksignal(SIGALRM);
             handleMessage(&tmsg);
             unblocksignal(SIGALRM);
         }
         blocksignal(SIGALRM);
-        while(myTransactionPoolNum < conf.TP_SIZE && checktmessage(&tmsg) != -1)
+        while (myTransactionPoolNum < conf.TP_SIZE && checktmessage(&tmsg) != -1)
             handleMessage(&tmsg);
         /* 1. Creazione del blocco candidato */
         /* We now have enough transactions to write a block, so we proceed to create one */
 
         /* Controlliamo nuovamente se vi sono sufficienti transazioni perché*/
         /* We proceed by transferring BLOCK_SIZE - 1 transactions to our block */
-        for(i = 0; i < conf.BLOCK_SIZE - 1; i++)
+        for (i = 0; i < conf.BLOCK_SIZE - 1; i++)
             block[i] = myTransactionPool[i];
-        for(; i < myTransactionPoolNum; i++)
+        for (; i < myTransactionPoolNum; i++)
             myTransactionPool[i - conf.BLOCK_SIZE + 1] = myTransactionPool[i];
         myTransactionPoolNum -= (conf.BLOCK_SIZE - 1);
         sum = 0;
-        for(i = 0; i < conf.BLOCK_SIZE - 1; i++)
+        for (i = 0; i < conf.BLOCK_SIZE - 1; i++)
             sum += block[i].reward;
         t.timestamp = time(NULL);
         t.sender = REWARDSENDER;
-        t.receiver = getpid();
+        t.receiver = loopIndex;
         t.quantity = sum;
         t.reward = 0;
         block[conf.BLOCK_SIZE - 1] = t;
@@ -103,14 +101,14 @@ void nodeRoutine(int loopIndex)
         /* 3. Scrivo il nuovo blocco appena elaborato nel libro mastro. N.B. Le transazioni scritte con successo
          * all'interno della Transaction Pool sono già stata eliminate dalla transaction pool prima. */
         waitbookwrite();
-        if(mbook->n_blocks == conf.REGISTRY_SIZE)
+        if (mbook->n_blocks == conf.REGISTRY_SIZE)
         {
             endbookwrite();
             /* Utilizziamo l'handler per gestire la chiusura e inviare le info necessarie al master */
             multipurposeHandler(SIGINT);
             /* L'handler di sigint si occuperà anche di terminare la nostra esecuzione */
         }
-        for(i = 0; i < conf.BLOCK_SIZE; i++)
+        for (i = 0; i < conf.BLOCK_SIZE; i++)
         {
             mbook->blocks[mbook->n_blocks][i] = block[i];
         }
@@ -119,113 +117,111 @@ void nodeRoutine(int loopIndex)
 
         /* We send signals for eventually waking up users */
         notified = 0;
-        for(i = 0; i < conf.BLOCK_SIZE - 1; i++)
+        for (i = 0; i < conf.BLOCK_SIZE - 1; i++)
         {
-            for(j = 0; j < notified; j++)
-                if(block[i].receiver == notificationarray[j])
+            for (j = 0; j < notified; j++)
+                if (block[i].receiver == notificationarray[j])
                     break;
-            if(j == notified)
+            if (j == notified)
             {
-                cmsg.object = CMEX_NEW_BLOCK;
-                cmsg.recipient = block[i].receiver;
-                sendcmessage(cmsg);
+                tmsg.object = TMEX_NEW_BLOCK;
+                sendtmessage(tmsg, block[i].receiver, TO_USER);
                 notificationarray[notified++] = block[i].receiver;
             }
         }
-
         unblocksignal(SIGALRM);
     }
-
-    printf("[%i] Finalmente posso fare qualcosa\n", getpid());
     exit(EXIT_SUCCESS);
 }
 
-void handleMessage(tmessage *ptr) {
+void handleMessage(tmessage *ptr)
+{
     extern int *nodemsgids;
     extern int nodesNumber;
-    cmessage cmsg;
-    switch (ptr->object) {
-        /* Se abbiamo sufficiente spazio, la aggiungiamo alla pool, sennò la rimandiamo indietro */
-        case TMEX_PROCESS_RQST:
+    tmessage tmsg;
+    switch (ptr->object)
+    {
+    /* Se abbiamo sufficiente spazio, la aggiungiamo alla pool, sennò la rimandiamo indietro */
+    case TMEX_PROCESS_RQST:
+    {
+        if (myTransactionPoolNum < conf.TP_SIZE)
+            myTransactionPool[myTransactionPoolNum++] = ptr->transaction;
+        else
         {
-            if(myTransactionPoolNum < conf.TP_SIZE)
-                myTransactionPool[myTransactionPoolNum++] = ptr->transaction;
-            else
-            {
-                cmsg.object = CMEX_TP_FULL;
-                cmsg.recipient = ptr->transaction.sender;
-                cmsg.transaction = ptr->transaction;
-                sendcmessage(cmsg);
-            }
-            break;
+            tmsg.object = TMEX_TP_FULL;
+            tmsg.transaction = ptr->transaction;
+            sendtmessage(tmsg, tmsg.transaction.sender, TO_USER);
         }
-        case TMEX_GIFT_MESSAGE:
+        break;
+    }
+    case TMEX_GIFT_MESSAGE:
+    {
+        if (myTransactionPoolNum < conf.TP_SIZE)
+            myTransactionPool[myTransactionPoolNum++] = ptr->transaction;
+        else
         {
-            if(myTransactionPoolNum < conf.TP_SIZE)
-                myTransactionPool[myTransactionPoolNum++] = ptr->transaction;
+            /* Object is already set */
+            if (--(ptr->value) > 0)
+                sendtmessage(*ptr, myFriends[so_random(0, myFriendsNum)], TO_NODE);
             else
             {
-                /* Object is already set */
-                if(--(ptr->hops) > 0)
-                    sendtmessage(*ptr, (int)so_random(0, myFriendsNum));
-                else
-                {
-                    /* HOPS hanno raggiunto 0, di conseguenza inviamo un messaggio di richiesta al master e gli inviamo
+                /* HOPS hanno raggiunto 0, di conseguenza inviamo un messaggio di richiesta al master e gli inviamo
                      * la transazione da inviare al nuovo nodo che genererà come da specifiche */
-                    cmsg.recipient = getppid();
-                    cmsg.object = CMEX_HOPS_ZERO;
-                    cmsg.transaction = ptr->transaction;
-                    sendcmessage(cmsg);
-                }
+                tmsg.object = TMEX_HOPS_ZERO;
+                tmsg.transaction = ptr->transaction;
+                sendtmessage(tmsg, 0, TO_MSTR);
             }
-            break;
         }
-        case TMEX_NEW_NODE:
-        {
-            nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
-            myFriends = reallocarray(myFriends, myFriendsNum+1, sizeof(pid_t));
-            /* Il campo hops contiene il msgid del nuovo nodo */
-            nodemsgids[nodesNumber] = ptr->hops;
-            /* Aggiungiamo l'index dell'id della queue come amico a quelli già esistenti e successivamente incrementiamo
+        break;
+    }
+    case TMEX_NEW_NODE:
+    {
+        nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
+        myFriends = reallocarray(myFriends, myFriendsNum + 1, sizeof(pid_t));
+        /* Il campo hops contiene il msgid del nuovo nodo */
+        nodemsgids[nodesNumber] = ptr->value;
+        /* Aggiungiamo l'index dell'id della queue come amico a quelli già esistenti e successivamente incrementiamo
              * sia il contatore degli amici, sia il numero dei nodi */
-            myFriends[myFriendsNum++] = nodesNumber++;
-            break;
-        }
-        default:
-        {
-            fprintf(stderr, "[N%i] Received unknown %li message object from %i\n", getpid(), ptr->object,
-                    ptr->transaction.sender);
-            break;
-        }
+        myFriends[myFriendsNum++] = nodesNumber++;
+        break;
+    }
+    default:
+    {
+        fprintf(stderr, "[N%i] Received unknown %li message object from %i\n", getpid(), ptr->object,
+                ptr->transaction.sender);
+        break;
+    }
     }
 }
 
 static void multipurposeHandler(int snum)
 {
-    cmessage cmsg;
-    switch (snum) {
-        case SIGALRM:
+    tmessage tmsg;
+    switch (snum)
+    {
+    case SIGALRM:
+    {
+        if (myTransactionPoolNum > 0)
         {
-            tmessage tmsg;
             tmsg.object = TMEX_GIFT_MESSAGE;
-            tmsg.hops = conf.HOPS;
+            tmsg.value = conf.HOPS;
             tmsg.transaction = myTransactionPool[--myTransactionPoolNum];
-            sendtmessage(tmsg, (int)so_random(0, myFriendsNum));
-            break;
+            sendtmessage(tmsg, myFriends[so_random(0, myFriendsNum)], TO_NODE);
         }
-        case SIGINT:
-        {
-            cmsg.object = CMEX_NODE_EXIT_INFO;
-            cmsg.friend = myTransactionPoolNum;
-            cmsg.recipient = getppid();
-            cmsg.transaction.sender = getpid();
-            sendcmessage(cmsg);
-            exit(EXIT_SUCCESS);
-        }
-        default:
-        {
-            fprintf(stderr, "[N%i] Unhandled signal #%i received\n", getpid(), snum);
-        }
+        break;
+    }
+    case SIGINT:
+    {
+        tmsg.object = TMEX_NODE_EXIT_INFO;
+        tmsg.value = myTransactionPoolNum;
+        tmsg.transaction.sender = getpid();
+        sendtmessage(tmsg, 0, TO_MSTR);
+        exit(EXIT_SUCCESS);
+    }
+    default:
+    {
+        fprintf(stderr, "[N%i] Unhandled signal #%i received\n", getpid(), snum);
+    }
     }
 }
 
@@ -235,35 +231,35 @@ static void setupSignalHandlers()
     signal(SIGINT, multipurposeHandler);
 }
 
-
-pid_t spawnNode(int loopIndex) {
+pid_t spawnNode(int loopIndex)
+{
     pid_t fValue = fork();
-    if(fValue == 0)
+    if (fValue == 0)
         nodeRoutine(loopIndex);
     else
         return fValue;
 }
 
 /* It still requires a pid_t node for cmessage type, loopIndex to avoid considering our index as friend's one */
-void sendFriendsTo(pid_t node, int loopIndex) {
+void sendFriendsTo(int loopIndex)
+{
     extern int nodesNumber;
     int i, j, alreadySet;
     int *includedArr;
-    cmessage cm;
-    cm.recipient = node;
-    cm.object = CMEX_FRIENDS_INFO;
+    tmessage tm;
+    tm.object = TMEX_FRIENDS_INFO;
     includedArr = calloc(conf.NUM_FRIENDS, sizeof(int));
     alreadySet = 0;
     for (i = 0; i < conf.NUM_FRIENDS; i++)
     {
-        cm.friend = (int)so_random(0, nodesNumber);
-        for(j = 0; j < alreadySet; j++)
-            if(includedArr[j] == cm.friend)
+        tm.value = (int)so_random(0, nodesNumber);
+        for (j = 0; j < alreadySet; j++)
+            if (includedArr[j] == tm.value)
                 break;
-        if(j == alreadySet && cm.friend != loopIndex)
+        if (j == alreadySet && tm.value != loopIndex)
         {
-            includedArr[alreadySet++] = cm.friend;
-            sendcmessage(cm);
+            includedArr[alreadySet++] = tm.value;
+            sendtmessage(tm, loopIndex, TO_NODE);
         }
         else
             i--;

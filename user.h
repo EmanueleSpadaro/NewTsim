@@ -8,6 +8,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-pid_t spawnUser();
+pid_t spawnUser(int loopIndex);
 
 #endif
