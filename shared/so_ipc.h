@@ -1,7 +1,3 @@
-/*
- Created by maffin on 1/31/22.
-*/
-
 #ifndef NEWTSIM_SO_IPC_H
 #define NEWTSIM_SO_IPC_H
 

@@ -1,7 +1,3 @@
-/*
- Created by maffin on 1/31/22.
-*/
-
 #include "node.h"
 #include "shared/so_conf.h"
 #include "shared/so_ipc.h"

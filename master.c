@@ -8,13 +8,13 @@
 #include "node.h"
 #include "user.h"
 
-/* Macro taken from StackOverflow */
+/* Macro presa da StackOverflow */
 #define refreshscreen() printf("\033[1;1H\033[2J");
 #define MAXUSERTHRESHOLD 10 /* Se vi sono più di questi utenti, stampiamo solo parzialmente gli utenti */
 #define MAXRICHESTNODES 3   /* Numero di utenti più ricchi da stampare se vi sono troppi utenti */
 #define MAXPOORNODES 3      /* Numero di utenti più poveri da stampare se vi sono troppi utenti */
 
-/* Global variables shared across modules */
+/* Variabili globali accessibili da tutti i moduli */
 conf_t conf;
 masterbook *mbook;
 extern pid_t *userPIDs;

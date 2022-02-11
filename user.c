@@ -1,6 +1,3 @@
-/*
- Created by maffin on 2/1/22.
-*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>

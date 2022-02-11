@@ -1,7 +1,3 @@
-/*
- Created by maffin on 1/31/22.
-*/
-
 #ifndef NEWTSIM_SO_CONF_H
 #define NEWTSIM_SO_CONF_H
 
@@ -25,8 +21,8 @@ typedef struct so_conf
     int RETRY;                   /* Users Max. amount of attempts to generate a transaction */
     int TP_SIZE;                 /* Nodes Transaction Pool size */
     int BLOCK_SIZE;              /* Master Book Block Size */
-    long MIN_TRANS_PROC_NSEC;    /* Nodes Min. emulated time for transaction processing */
-    long MAX_TRANS_PROC_NSEC;    /* Nodes Max. emulated time for transaction processing */
+    long MIN_TRANS_PROC_NSEC;    /* Nodes Min. emulated time for block processing */
+    long MAX_TRANS_PROC_NSEC;    /* Nodes Max. emulated time for block processing */
     int REGISTRY_SIZE;           /* Master Book Blocks Capacity */
     int SIM_SEC;                 /* Simulation duration in seconds */
     int NUM_FRIENDS;             /* Nodes amount of Friend Nodes */

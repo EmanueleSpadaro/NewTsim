@@ -1,7 +1,3 @@
-/*
- Created by maffin on 1/31/22.
-*/
-
 #include "so_random.h"
 #include <stdio.h>
 #include <stdlib.h>

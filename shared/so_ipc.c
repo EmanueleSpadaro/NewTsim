@@ -1,7 +1,3 @@
-/*
- Created by maffin on 1/31/22.
-*/
-
 #include "so_ipc.h"
 #include "so_conf.h"
 #include <stdio.h>
