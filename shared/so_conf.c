@@ -317,7 +317,7 @@ void printconf(conf_t conf)
 void printhelp()
 {
     printf("tsim - A OS Lab. Project\n"
-           "Emanuele Spadaro - Alessandro Truffo - Alessandro Soliman\n"
+           "Emanuele Spadaro\n"
            "Usage:\n"
            "tsim (no arguments)\n"
            " it writes a configuration file to customize simulation or reads it if it exists\n"
