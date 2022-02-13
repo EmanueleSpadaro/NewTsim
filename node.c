@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#define GIFTNSEC 200000000
+#define GIFTNSEC 50000000
 #define REWARDSENDER -1
 
 extern conf_t conf;

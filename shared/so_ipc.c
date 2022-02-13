@@ -232,7 +232,7 @@ int endbookwrite() {
 
 int waitbookread() {
     struct sembuf sbuf;
-    sbuf.sem_flg = SEM_UNDO;
+    sbuf.sem_flg = 0;
     sbuf.sem_num = SEM_READER;
     sbuf.sem_op = -1;
     /* We wait for the reader semaphore to increase read count */
@@ -255,7 +255,7 @@ int waitbookread() {
 
 int endbookread() {
     struct sembuf sbuf;
-    sbuf.sem_flg = SEM_UNDO;
+    sbuf.sem_flg = 0;
     sbuf.sem_num = SEM_READER;
     sbuf.sem_op = -1;
     semop(semid, &sbuf, 1);
