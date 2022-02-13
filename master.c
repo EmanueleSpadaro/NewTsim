@@ -11,8 +11,8 @@
 /* Macro presa da StackOverflow */
 #define refreshscreen() printf("\033[1;1H\033[2J");
 #define MAXUSERTHRESHOLD 10 /* Se vi sono più di questi utenti, stampiamo solo parzialmente gli utenti */
-#define MAXRICHESTNODES 3   /* Numero di utenti più ricchi da stampare se vi sono troppi utenti */
-#define MAXPOORNODES 3      /* Numero di utenti più poveri da stampare se vi sono troppi utenti */
+#define MAXRICHESTUSERS 3   /* Numero di utenti più ricchi da stampare se vi sono troppi utenti */
+#define MAXPOORUSERS 3      /* Numero di utenti più poveri da stampare se vi sono troppi utenti */
 
 /* Variabili globali accessibili da tutti i moduli */
 conf_t conf;
@@ -21,7 +21,6 @@ extern pid_t *userPIDs;
 pid_t *nodePIDs;
 int nodesNumber;
 char sigint = 0;
-
 
 /* Struttura per agevolare la gestione delle informazioni di uscita ed evitare due array paralleli */
 struct node_exit_info
@@ -57,10 +56,10 @@ int main(int argc, char const *argv[])
     /* Se gli utenti impongono di stampare valori parziali della simulazione, allochiamo lo spazio */
     if (conf.USERS_NUM > MAXUSERTHRESHOLD)
     {
-        richArr = calloc(MAXRICHESTNODES, sizeof(int));
-        richArrIDs = calloc(MAXRICHESTNODES, sizeof(int));
-        poorArr = calloc(MAXPOORNODES, sizeof(int));
-        poorArrIDs = calloc(MAXPOORNODES, sizeof(int));
+        richArr = calloc(MAXRICHESTUSERS, sizeof(int));
+        richArrIDs = calloc(MAXRICHESTUSERS, sizeof(int));
+        poorArr = calloc(MAXPOORUSERS, sizeof(int));
+        poorArrIDs = calloc(MAXPOORUSERS, sizeof(int));
     }
 
     /* Allochiamo nella HEAP i nodi considerando che loro possono effettivamente aumentare */
@@ -95,7 +94,9 @@ int main(int argc, char const *argv[])
         if (mbook->n_blocks == conf.REGISTRY_SIZE)
             break;
         endbookread();
-        while (checktmessage(&tmsg) != -1)
+        while (checktmessage(&tmsg, TMEX_USER_EXIT) != -1)
+            handleMessageM(&tmsg);
+        while (checktmessage(&tmsg, TMEX_HOPS_ZERO) != -1)
             handleMessageM(&tmsg);
         nsleep(1000000000);
     }
@@ -200,8 +201,8 @@ static void printstatus(int secs, char total)
         /* Con questi teniamo conto del più povero per poter avere i più ricchi nell'array */
         tmp = user_budgets[0];
         tmpindex = 0;
-        /* Inizialmente riempiamo l'array con MAXRICHESTNODES, di base inizialmente sono "i più ricchi" */
-        for (i = 0; i < MAXRICHESTNODES; i++)
+        /* Inizialmente riempiamo l'array con MAXRICHESTUSERS, di base inizialmente sono "i più ricchi" */
+        for (i = 0; i < MAXRICHESTUSERS; i++)
         {
             richArrIDs[i] = i;
             richArr[i] = user_budgets[i];
@@ -224,7 +225,7 @@ static void printstatus(int secs, char total)
                 /* Non necessitiamo di far puntare tmpindex ad i, perché lo fa già dato lo swap, ma solo il budget */
                 tmp = richArr[tmpindex];
                 /* Vogliamo assicurarci di far puntare tmp e tmpindex ai valori del più povero */
-                for (j = 0; j < MAXRICHESTNODES; j++)
+                for (j = 0; j < MAXRICHESTUSERS; j++)
                 {
                     if (tmp > richArr[j])
                     {
@@ -234,10 +235,10 @@ static void printstatus(int secs, char total)
                 }
             }
         }
-        /* Ora li riordino dal più ricco in posizione zero al più povero in posizione MAXRICHESTNODES-1 */
-        for (i = 0; i < MAXRICHESTNODES; i++)
+        /* Ora li riordino dal più ricco in posizione zero al più povero in posizione MAXRICHESTUSERS-1 */
+        for (i = 0; i < MAXRICHESTUSERS; i++)
         {
-            for (j = 0; j < MAXRICHESTNODES; j++)
+            for (j = 0; j < MAXRICHESTUSERS; j++)
             {
                 if (richArr[i] > richArr[j])
                 {
@@ -252,9 +253,9 @@ static void printstatus(int secs, char total)
         }
         /* Con questi teniamo conto del più ricco per poter avere i più poveri nell'array */
         tmp = user_budgets[0];
-        tmpindex = 0;
-        /* Inizialmente riempiamo l'array con MAXPOORNODES, di base inizialmente sono "i più poveri" */
-        for (i = 0; i < MAXPOORNODES; i++)
+        tmpindex;
+        /* Inizialme    nte riempiamo l'arra        y con MAXPOORUSERS,  di base inizialmente sono "i più poveri" */
+        for (i = 0; i < MAXPOORUSERS; i++)
         {
             poorArrIDs[i] = i;
             poorArr[i] = user_budgets[i];
@@ -276,8 +277,8 @@ static void printstatus(int secs, char total)
                 poorArr[tmpindex] = user_budgets[i];
                 /* Non necessitiamo di far puntare tmpindex ad i, perché lo fa già dato lo swap, ma solo il budget */
                 tmp = poorArr[tmpindex];
-                /* Vogliamo assicurarci di far puntare tmp e tmpindex ai valori del più ricco */
-                for (j = 0; j < MAXPOORNODES; j++)
+                /* Vogliamo assicurarci di far p    unta    re tmp e tmpindex ai valori del più ricco */
+                for (j = 0; j < MAXPOORUSERS; j++)
                 {
                     if (tmp < poorArr[j])
                     {
@@ -287,10 +288,10 @@ static void printstatus(int secs, char total)
                 }
             }
         }
-        /* Ora li riordino dal più ricco in posizione zero al più povero in posizione MAXPOORNODES-1 */
-        for (i = 0; i < MAXPOORNODES; i++)
+        /* Ora li riordino dal più ricco         in posizione zero al più povero in posizione MAXPOORUSERS- 1 */
+        for (i = 0; i < MAXPOORUSERS; i++)
         {
-            for (j = 0; j < MAXPOORNODES; j++)
+            for (j = 0; j < MAXPOORUSERS; j++)
             {
                 if (poorArr[i] > poorArr[j])
                 {
@@ -304,10 +305,10 @@ static void printstatus(int secs, char total)
             }
         }
         puts("");
-        for (i = 0; i < MAXRICHESTNODES; i++)
+        for (i = 0; i < MAXRICHESTUSERS; i++)
             printf("[USER %d] Accounted Balance: %d\n", userPIDs[richArrIDs[i]], richArr[i]);
         puts("\n\t\t(...)\n");
-        for (i = 0; i < MAXPOORNODES; i++)
+        for (i = 0; i < MAXPOORUSERS; i++)
             printf("[USER %d] Accounted Balance: %d\n", userPIDs[poorArrIDs[i]], poorArr[i]);
     }
     printf("\n");
@@ -325,10 +326,10 @@ static void simterm()
     for (i = 0; i < nodesNumber; i++)
         kill(nodePIDs[i], SIGINT);
     xnodecount = 0;
-    node_exit_info = calloc(nodesNumber, sizeof(int));
+    node_exit_info = calloc(nodesNumber, sizeof(struct node_exit_info));
     while (xnodecount < nodesNumber)
     {
-        waittmessage(&tmsg);
+        waittmessage(&tmsg, 0);
         if (tmsg.object == TMEX_NODE_EXIT_INFO)
         {
             node_exit_info[xnodecount].pid = tmsg.transaction.sender;
@@ -343,7 +344,6 @@ static void handleMessageM(tmessage *tmsgptr)
     int i, j, notifiedCtr, newmsgqid;
     pid_t *alreadyNotified;
     pid_t tmpindex;
-    tmessage tmsg;
     switch (tmsgptr->object)
     {
     /* Incrementiamo il contatore degli utenti usciti */
@@ -359,6 +359,8 @@ static void handleMessageM(tmessage *tmsgptr)
         /* Rialloco per aver una cella in più nell'array dei nodi per contenere quello nuovo*/
         nodePIDs = reallocarray(nodePIDs, nodesNumber + 1, sizeof(pid_t));
         nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
+        node_budgets = reallocarray(node_budgets, nodesNumber + 1, sizeof(int));
+
         newmsgqid = allocnewmsgq();
         nodemsgids[nodesNumber] = newmsgqid;
         /* Per mantenere la consistenza di nodesNumber e permettere agevolmente di ricevere amici anche al nuovo
@@ -369,20 +371,19 @@ static void handleMessageM(tmessage *tmsgptr)
         /* Riporto nodesNumber ad un valore che ci permette di usarlo come riferimento alla nuova istanza di nodo */
         nodesNumber -= 1;
         /* Gli invio NUM_FRIENDS nodi come amici */
-        for (i = 0; i < conf.NUM_FRIENDS; i++)
-            sendFriendsTo(nodesNumber);
+        sendFriendsTo(nodesNumber);
         /* Gli invio la transazione da gestire, sarà il primo messaggio a lui destinato e di conseguenza sarà
              * effettivamente la prima transazione che avrà nella Transaction Pool come da richiesta */
-        tmsg.object = TMEX_PROCESS_RQST;
-        sendtmessage(tmsg, nodesNumber, TO_NODE);
+        tmsgptr->object = TMEX_PROCESS_RQST;
+        sendtmessage(*tmsgptr, nodesNumber, TO_NODE);
 
         /* Notifico SO_NUM_FRIENDS nodi diversi di aggiungere il nuovo arrivato alla loro lista di amici */
         /* Preparo un array sufficientemente grande per evitare doppie inclusioni da parte dello stesso nodo */
         alreadyNotified = calloc(conf.NUM_FRIENDS, sizeof(int));
         notifiedCtr = 0;
         /* Inviamo nel campo value la msgid del nuovo arrivato */
-        tmsg.object = TMEX_NEW_NODE;
-        tmsg.value = newmsgqid;
+        tmsgptr->object = TMEX_NEW_NODE;
+        tmsgptr->value = newmsgqid;
         for (i = 0; i < conf.NUM_FRIENDS; i++)
         {
             /* NodesNumber non è ancora incrementato, quindi otteniamo solo un nodo tra quelli già preesistenti */
@@ -392,9 +393,8 @@ static void handleMessageM(tmessage *tmsgptr)
                     break;
             /* Se j è uguale al numero di notificati, allora l'id generato non è stato ancora notificato */
             /* In questo modo evitiamo che un nodo preesistente aggiunga due volte il nuovo arrivato agli amici */
-            if (j == notifiedCtr)
+            if (j == notifiedCtr && trysendtmessage(*tmsgptr, tmpindex, TO_NODE) != -1)
             {
-                sendtmessage(tmsg, tmpindex, TO_NODE);
                 alreadyNotified[notifiedCtr++] = tmpindex;
             }
             else
@@ -403,10 +403,10 @@ static void handleMessageM(tmessage *tmsgptr)
         free(alreadyNotified); /* Disalloco l'array allocato per gestire le duplicazioni di segnale */
 
         /* Una volta notificati i nodi di aggiungere il nuovo arrivato alla lista degli amici, informiamo gli utenti */
-        tmsg.object = TMEX_NEW_NODE;
-        tmsg.value = newmsgqid;
+        tmsgptr->object = TMEX_NEW_NODE;
+        tmsgptr->value = newmsgqid;
         for (i = 0; i < conf.USERS_NUM; i++)
-            sendtmessage(tmsg, i, TO_USER);
+            trysendtmessage(*tmsgptr, i, TO_USER);
         /* Aggiorno il contatore dei nodi online nella simulazione finalmente */
         nodesNumber++;
         break;

@@ -13,15 +13,17 @@ extern conf_t conf;
 extern char sigint;
 extern masterbook *mbook;
 
-static pid_t *myFriends;
-static sig_atomic_t myFriendsNum = 0;
+static int *myFriends;
+static int myFriendsNum = 0;
 static transaction *myTransactionPool;
-static sig_atomic_t myTransactionPoolNum = 0;
+static int myTransactionPoolNum = 0;
 
 void handleMessage(tmessage *ptr);
 
 static void multipurposeHandler(int snum);
 static void setupSignalHandlers();
+
+static int myLoopIndex;
 
 void nodeRoutine(int loopIndex)
 {
@@ -33,7 +35,7 @@ void nodeRoutine(int loopIndex)
     setupSignalHandlers();
     srandom(time(NULL) ^ (getpid() << 16));
     updateMyListeningQueue(loopIndex, UPDATE_AS_NODE);
-
+    myLoopIndex = loopIndex;
     notificationarray = calloc(conf.USERS_NUM, sizeof(pid_t));
     block = calloc(conf.BLOCK_SIZE, sizeof(transaction));
     myTransactionPool = calloc(conf.TP_SIZE, sizeof(transaction));
@@ -42,13 +44,7 @@ void nodeRoutine(int loopIndex)
     /* We wait for control messages containing friends infos */
     for (myFriendsNum = 0; myFriendsNum < conf.NUM_FRIENDS; myFriendsNum++)
     {
-        waittmessage(&tmsg);
-        if (tmsg.object != TMEX_FRIENDS_INFO)
-        {
-            fprintf(stderr, "[N%i] Quitting because of unexpected message when waiting for friends\n",
-                    getpid());
-            exit(EXIT_FAILURE);
-        }
+        waittmessage(&tmsg, TMEX_FRIENDS_INFO);
         myFriends[myFriendsNum] = tmsg.value;
     }
     /* We wait for the entire simulation to be ready */
@@ -63,14 +59,14 @@ void nodeRoutine(int loopIndex)
         /* Resto in waiting fino ad avere sufficienti transazioni per emettere un blocco */
         while (myTransactionPoolNum < conf.BLOCK_SIZE - 1)
         {
-            if (waittmessage(&tmsg) == -1)
+            if (waittmessage(&tmsg, 0) == -1)
                 continue;
             blocksignal(SIGALRM);
             handleMessage(&tmsg);
             unblocksignal(SIGALRM);
         }
         blocksignal(SIGALRM);
-        while (myTransactionPoolNum < conf.TP_SIZE && checktmessage(&tmsg) != -1)
+        while (checktmessage(&tmsg, 0) != -1)
             handleMessage(&tmsg);
         /* 1. Creazione del blocco candidato */
         /* We now have enough transactions to write a block, so we proceed to create one */
@@ -121,7 +117,9 @@ void nodeRoutine(int loopIndex)
             if (j == notified)
             {
                 tmsg.object = TMEX_NEW_BLOCK;
-                sendtmessage(tmsg, block[i].receiver, TO_USER);
+                /* L'utente se ha la queue piena è morto molto probabilmente, ma comunque inviamo i messaggi solo a scopo 
+                di notifica, di conseguenza essendo che legge solo per sfruttare l'attesa, non ci importa inviargliene uno con certezza */
+                trysendtmessage(tmsg, block[i].receiver, TO_USER);
                 notificationarray[notified++] = block[i].receiver;
             }
         }
@@ -134,7 +132,6 @@ void handleMessage(tmessage *ptr)
 {
     extern int *nodemsgids;
     extern int nodesNumber;
-    tmessage tmsg;
     switch (ptr->object)
     {
     /* Se abbiamo sufficiente spazio, la aggiungiamo alla pool, sennò la rimandiamo indietro */
@@ -144,9 +141,18 @@ void handleMessage(tmessage *ptr)
             myTransactionPool[myTransactionPoolNum++] = ptr->transaction;
         else
         {
-            tmsg.object = TMEX_TP_FULL;
-            tmsg.transaction = ptr->transaction;
-            sendtmessage(tmsg, tmsg.transaction.sender, TO_USER);
+            ptr->object = TMEX_GIFT_MESSAGE;
+            ptr->value = conf.HOPS;
+            while(ptr->value > 0)
+                if(trysendtmessage(*ptr, myFriends[so_random(0, myFriendsNum)], TO_NODE) != -1)
+                    break;
+                else
+                    ptr->value--;
+            if(ptr->value == 0)
+            {
+                ptr->object = TMEX_HOPS_ZERO;
+                sendtmessage(*ptr, 0, TO_MSTR);
+            }
         }
         break;
     }
@@ -156,16 +162,17 @@ void handleMessage(tmessage *ptr)
             myTransactionPool[myTransactionPoolNum++] = ptr->transaction;
         else
         {
-            /* Object is already set */
-            if (--(ptr->value) > 0)
-                sendtmessage(*ptr, myFriends[so_random(0, myFriendsNum)], TO_NODE);
-            else
+            /* Object is already set to gift */
+            ptr->value = conf.HOPS;
+            while(ptr->value > 0)
+                if(trysendtmessage(*ptr, myFriends[so_random(0, myFriendsNum)], TO_NODE) != -1)
+                    break;
+                else
+                    ptr->value--;
+            if(ptr->value == 0)
             {
-                /* HOPS hanno raggiunto 0, di conseguenza inviamo un messaggio di richiesta al master e gli inviamo
-                     * la transazione da inviare al nuovo nodo che genererà come da specifiche */
-                tmsg.object = TMEX_HOPS_ZERO;
-                tmsg.transaction = ptr->transaction;
-                sendtmessage(tmsg, 0, TO_MSTR);
+                ptr->object = TMEX_HOPS_ZERO;
+                sendtmessage(*ptr, 0, TO_MSTR);
             }
         }
         break;
@@ -202,16 +209,28 @@ static void multipurposeHandler(int snum)
             tmsg.object = TMEX_GIFT_MESSAGE;
             tmsg.value = conf.HOPS;
             tmsg.transaction = myTransactionPool[--myTransactionPoolNum];
-            sendtmessage(tmsg, myFriends[so_random(0, myFriendsNum)], TO_NODE);
+            while(tmsg.value > 0)
+                if(trysendtmessage(tmsg, myFriends[so_random(0, myFriendsNum)], TO_NODE) != -1)
+                    break;
+                else
+                    tmsg.value--;
+            if(tmsg.value == 0)
+            {
+                tmsg.object = TMEX_HOPS_ZERO;
+                sendtmessage(tmsg, 0, TO_MSTR);
+            }
         }
         break;
     }
     case SIGINT:
     {
+        /* Non possiamo prevedere quando riceveremo e dove il prossimo SIGALRM, per prevenire che interrompa la call di send la blocchiamo */
+        blocksignal(SIGALRM);
         tmsg.object = TMEX_NODE_EXIT_INFO;
         tmsg.value = myTransactionPoolNum;
         tmsg.transaction.sender = getpid();
         sendtmessage(tmsg, 0, TO_MSTR);
+        /* Non ci interessa sbloccare il segnale, dato che usciamo */
         exit(EXIT_SUCCESS);
     }
     default:

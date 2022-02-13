@@ -65,9 +65,9 @@ void userRoutine()
         }
         else
         {
-            if (waittmessage(&tmsg) != -1)
+            if (waittmessage(&tmsg, 0) != -1)
                 handleMessageU(&tmsg);
-            while (checktmessage(&tmsg) != -1)
+            while (checktmessage(&tmsg, 0) != -1)
                 handleMessageU(&tmsg);
         }
         unblocksignal(SIGUSR1); /* Prevenzione inconsistenza budget con transazioni manuali */

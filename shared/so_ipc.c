@@ -185,12 +185,12 @@ int sendtmessage(tmessage tm, int index, short toConst) {
     }
 }
 
-int waittmessage(tmessage *tm) {
-    return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), 0, 0);
+int waittmessage(tmessage *tm, long msgType) {
+    return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), msgType, 0);
 }
 
-int checktmessage(tmessage *tm) {
-    return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), 0, IPC_NOWAIT);
+int checktmessage(tmessage *tm, long msgType) {
+    return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), msgType, IPC_NOWAIT);
 }
 
 int allocnewmsgq()
