@@ -38,15 +38,16 @@ typedef struct {
 #define UPDATE_AS_USER 0xE
 int updateMyListeningQueue(int i, short type);
 
-#define TMEX_PROCESS_RQST 0x32
-#define TMEX_GIFT_MESSAGE 0x69
-#define TMEX_NEW_NODE     0xAAAA
-#define TMEX_FRIENDS_INFO   0x3333
-#define TMEX_TP_FULL        0x24
-#define TMEX_NEW_BLOCK      0x55
-#define TMEX_HOPS_ZERO      0x71
-#define TMEX_USER_EXIT      0xEEEE
-#define TMEX_NODE_EXIT_INFO 0xBBBB
+#define TMEX_PROCESS_RQST   0x1
+#define TMEX_GIFT_MESSAGE   0x2
+#define TMEX_NEW_NODE       0x3
+#define TMEX_FRIENDS_INFO   0x4
+#define TMEX_TP_FULL        0x5
+#define TMEX_NEW_BLOCK      0x6
+#define TMEX_HOPS_ZERO      0x7
+#define TMEX_USER_EXIT      0x8
+#define TMEX_NODE_EXIT_INFO 0x9
+
 /* Struttura che definisce la struttura dei messaggi all'interno della message queue */
 /* Utilizziamo il valore del tipo di messaggio come slot per indicare il destinatario */
 typedef struct {
@@ -60,8 +61,8 @@ typedef struct {
 #define TO_MSTR 0x3
 int trysendtmessage(tmessage tm, int index, short toConst);
 int sendtmessage(tmessage tm, int index, short toConst);
-int waittmessage(tmessage *tm);
-int checktmessage(tmessage *tm);
+int waittmessage(tmessage *tm, long msgType);
+int checktmessage(tmessage *tm, long msgType);
 int allocnewmsgq();
 
 int waitbookwrite();
