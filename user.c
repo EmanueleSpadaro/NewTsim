@@ -202,7 +202,8 @@ static void addPending(transaction t)
 
 static int transeq(transaction t1, transaction t2)
 {
-    if (t1.timestamp == t2.timestamp && t1.sender == t2.sender && t1.receiver == t2.receiver)
+    if (t1.timestamp == t2.timestamp && t1.sender == t2.sender && t1.receiver == t2.receiver
+    && t1.quantity == t2.quantity && t1.reward == t2.reward)
         return 1;
     return 0;
 }

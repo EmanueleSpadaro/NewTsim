@@ -164,9 +164,19 @@ static int computeblockbudget(int index, int blockNumber, int toConst)
             else if (mbook->blocks[blockNumber][i].receiver == index)
                 user_budgets[index] += (mbook->blocks[blockNumber][i].quantity);
         }
+        return user_budgets[index];
     }
-    else if (toConst == TO_NODE && mbook->blocks[blockNumber][conf.BLOCK_SIZE - 1].receiver == index)
-        node_budgets[index] += mbook->blocks[blockNumber][conf.BLOCK_SIZE - 1].quantity;
+    else if (toConst == TO_NODE)
+    {
+        if (mbook->blocks[blockNumber][conf.BLOCK_SIZE - 1].receiver == index)
+            node_budgets[index] += mbook->blocks[blockNumber][conf.BLOCK_SIZE - 1].quantity;
+        return node_budgets[index];
+    }
+    else
+    {
+        fprintf(stderr, "Invalid toConst passed to computeblockbudget@Master\n index: %i blockn: %i toConst: %i\n", index, blockNumber, toConst);
+        return -1;
+    }
 }
 
 static void printstatus(int secs, char total)
@@ -312,8 +322,18 @@ static void printstatus(int secs, char total)
             printf("[USER %d] Accounted Balance: %d\n", userPIDs[poorArrIDs[i]], poorArr[i]);
     }
     printf("\n");
-    for (i = 0; i < conf.NODES_NUM; i++)
-        printf("[NODE %d] Accounted Balance: %d\n", nodePIDs[i], node_budgets[i]);
+    if (!total)
+    {
+        for (i = 0; i < conf.NODES_NUM; i++)
+            printf("[NODE %d] Accounted Balance: %d\n", nodePIDs[i], node_budgets[i]);
+        if (nodesNumber > conf.NODES_NUM)
+            printf("\n(%i more nodes not printed for readability...)\n", nodesNumber - conf.NODES_NUM);
+    }
+    else
+    {
+        for (i = 0; i < nodesNumber; i++)
+            printf("[NODE %d] Accounted Balance: %d\n", nodePIDs[i], node_budgets[i]);
+    }
     printf("=====================================================\n");
 }
 
@@ -363,6 +383,7 @@ static void handleMessageM(tmessage *tmsgptr)
 
         newmsgqid = allocnewmsgq();
         nodemsgids[nodesNumber] = newmsgqid;
+        node_budgets[nodesNumber] = 0;
         /* Per mantenere la consistenza di nodesNumber e permettere agevolmente di ricevere amici anche al nuovo
              * nodo, incremento in modo fittizio nodesNumber per far si che spawnNode permetta al nuovo nodo di avere
              * nodesNumber effettivamente consistente con quello che sarà della simulazione dopo la sua creazione */
