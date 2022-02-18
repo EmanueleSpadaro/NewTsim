@@ -2,13 +2,13 @@
 TARGET=NewTsim
 #Compiler binary
 CC=gcc
-#Compiler Flags													
-CFLAGS=-std=c89 -pedantic -D_GNU_SOURCE -Werror			
+#Compiler Flags									
+CFLAGS=-std=c89 -pedantic -D_GNU_SOURCE -Werror -lrt			
 OBJS = master.o node.o user.o shared/so_conf.o shared/so_ipc.o shared/so_random.o
 
 #Compiles outdated modules and links them to deploy the target
 #If there are some missing .o files, make compiles their .c and later on
-#it runs the compilation with $(CC) $(OBJS) $(CFLAGS) -o $(TARGET)
+#it runs the linking between object files
 $(TARGET): $(OBJS)
 	$(CC) $(OBJS) $(CFLAGS) -o $(TARGET)
 
