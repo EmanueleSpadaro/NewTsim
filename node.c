@@ -59,6 +59,12 @@ void nodeRoutine(int loopIndex)
         /* Resto in waiting fino ad avere sufficienti transazioni per emettere un blocco */
         while (myTransactionPoolNum < conf.BLOCK_SIZE - 1)
         {
+            while(checktmessage(&tmsg, TMEX_NEW_NODE) != -1)
+            {
+                blocksignal(SIGALRM);
+                handleMessage(&tmsg);
+                unblocksignal(SIGALRM);
+            }
             if (waittmessage(&tmsg, 0) == -1)
                 continue;
             blocksignal(SIGALRM);
@@ -66,7 +72,7 @@ void nodeRoutine(int loopIndex)
             unblocksignal(SIGALRM);
         }
         blocksignal(SIGALRM);
-        while (checktmessage(&tmsg, 0) != -1)
+        while (checktmessage(&tmsg, 0) != -1 || checktmessage(&tmsg, TMEX_NEW_NODE) != -1)
             handleMessage(&tmsg);
         /* 1. Creazione del blocco candidato */
         /* We now have enough transactions to write a block, so we proceed to create one */
@@ -132,6 +138,17 @@ void handleMessage(tmessage *ptr)
 {
     extern int *nodemsgids;
     extern int nodesNumber;
+    if(ptr->object == getpid())
+    {
+        nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
+        myFriends = reallocarray(myFriends, myFriendsNum + 1, sizeof(pid_t));
+        /* Il campo hops contiene il msgid del nuovo nodo */
+        nodemsgids[nodesNumber] = ptr->value;
+        /* Aggiungiamo l'index dell'id della queue come amico a quelli già esistenti e successivamente incrementiamo
+             * sia il contatore degli amici, sia il numero dei nodi */
+        myFriends[myFriendsNum++] = nodesNumber++;
+	return;
+    }
     switch (ptr->object)
     {
     /* Se abbiamo sufficiente spazio, la aggiungiamo alla pool, sennò la rimandiamo indietro */
@@ -175,17 +192,6 @@ void handleMessage(tmessage *ptr)
                 sendtmessage(*ptr, 0, TO_MSTR);
             }
         }
-        break;
-    }
-    case TMEX_NEW_NODE:
-    {
-        nodemsgids = reallocarray(nodemsgids, nodesNumber + 1, sizeof(int));
-        myFriends = reallocarray(myFriends, myFriendsNum + 1, sizeof(pid_t));
-        /* Il campo hops contiene il msgid del nuovo nodo */
-        nodemsgids[nodesNumber] = ptr->value;
-        /* Aggiungiamo l'index dell'id della queue come amico a quelli già esistenti e successivamente incrementiamo
-             * sia il contatore degli amici, sia il numero dei nodi */
-        myFriends[myFriendsNum++] = nodesNumber++;
         break;
     }
     default:

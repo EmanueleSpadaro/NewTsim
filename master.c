@@ -414,8 +414,10 @@ static void handleMessageM(tmessage *tmsgptr)
                     break;
             /* Se j è uguale al numero di notificati, allora l'id generato non è stato ancora notificato */
             /* In questo modo evitiamo che un nodo preesistente aggiunga due volte il nuovo arrivato agli amici */
-            if (j == notifiedCtr && trysendtmessage(*tmsgptr, tmpindex, TO_NODE) != -1)
+            if (j == notifiedCtr)
             {
+                tmsgptr->transaction.receiver = nodePIDs[tmpindex];
+                sendtmessage(*tmsgptr, tmpindex, TO_NODE);
                 alreadyNotified[notifiedCtr++] = tmpindex;
             }
             else

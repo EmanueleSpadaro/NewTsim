@@ -17,6 +17,7 @@ extern int nodesNumber;
 static int semid;
 static int shmid;
 static int ctrlmsgid;
+static int friendmsgid;
 static int ilistenfrom;
 /* Non statico, per permettere di accedervi e gestire l'evento di un nuovo nodo differentemente
  * tra user, node, master*/
@@ -43,6 +44,8 @@ int initipcs() {
     /* We get a Message Queue to enable easy transactions exchange */
     ctrlmsgid = msgget(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | IPC_RW);
     ilistenfrom = ctrlmsgid;
+    IFERRNORETIT
+    friendmsgid = msgget(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | IPC_RW);
     IFERRNORETIT
     nodemsgids = calloc(nodesNumber, sizeof(int));
     for(i = 0; i < nodesNumber; i++)
@@ -89,6 +92,7 @@ int releaseipcs() {
         errOR |= msgctl(usermsgids[i], IPC_RMID, 0);
     return errOR
     | msgctl(ctrlmsgid, IPC_RMID, 0)
+    | msgctl(friendmsgid, IPC_RMID, 0)
     | shmctl(shmid, IPC_RMID, 0)
     | semctl(semid, IPC_RMID, 0);
 }
@@ -172,7 +176,13 @@ int sendtmessage(tmessage tm, int index, short toConst) {
         }
         case TO_NODE:
         {
-            return msgsnd(nodemsgids[index], &tm, sizeof(tm) - sizeof(long), 0);
+            if(tm.object != TMEX_NEW_NODE)
+                return msgsnd(nodemsgids[index], &tm, sizeof(tm) - sizeof(long), 0);
+            else
+            {
+                tm.object = tm.transaction.receiver;
+                return msgsnd(friendmsgid, &tm, sizeof(tm) - sizeof(long), 0);
+            }                
         }
         case TO_MSTR:
         {
@@ -186,11 +196,31 @@ int sendtmessage(tmessage tm, int index, short toConst) {
 }
 
 int waittmessage(tmessage *tm, long msgType) {
-    return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), msgType, 0);
+    switch(msgType)
+    {
+        case TMEX_NEW_NODE:
+        {
+            return msgrcv(friendmsgid, tm, sizeof(*tm) - sizeof(long), getpid(), 0); 
+        }
+        default:
+        {
+            return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), msgType, 0);
+        }
+    }
 }
 
 int checktmessage(tmessage *tm, long msgType) {
-    return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), msgType, IPC_NOWAIT);
+    switch(msgType)
+    {
+        case TMEX_NEW_NODE:
+        {
+            return msgrcv(friendmsgid, tm, sizeof(*tm) - sizeof(long), getpid(), IPC_NOWAIT); 
+        }
+        default:
+        {
+            return msgrcv(ilistenfrom, tm, sizeof(*tm) - sizeof(long), msgType, IPC_NOWAIT);
+        }
+    }
 }
 
 int allocnewmsgq()
