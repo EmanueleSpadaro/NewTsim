@@ -147,6 +147,7 @@ void handleMessage(tmessage *ptr)
         /* Aggiungiamo l'index dell'id della queue come amico a quelli già esistenti e successivamente incrementiamo
              * sia il contatore degli amici, sia il numero dei nodi */
         myFriends[myFriendsNum++] = nodesNumber++;
+	return;
     }
     switch (ptr->object)
     {
